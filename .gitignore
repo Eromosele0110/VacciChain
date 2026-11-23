@@ -29,6 +29,10 @@ Thumbs.db
 venv/
 .venv/
 
+# Test snapshots (coverage artifacts)
+**/__snapshots__/
+**/*.snap
+
 # IDE
 .vscode/
 .idea/

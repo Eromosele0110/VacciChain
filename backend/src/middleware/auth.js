@@ -1,32 +1,28 @@
 const jwt = require('jsonwebtoken');
-const { getVerificationKeys } = require('../jwtKeys');
+const { getVerificationKeys, ISSUER, AUDIENCE } = require('../jwtKeys');
+const { AppError } = require('./errors');
 
 /**
- * JWT authentication middleware.
+ * Shared JWT verification logic with key rotation and claim validation.
  *
  * Supports key rotation: tries the current key first (matched by `kid` header),
  * then falls back to previous keys so tokens issued before a rotation remain
- * valid during the transition window.
+ * valid during the transition window. Keys older than the rotation cutoff are
+ * rejected.
  *
- * @param {Object} req - Express request object
- * @param {string} req.headers.authorization - Bearer token (format: "Bearer <token>")
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
+ * Validates required claims (sub, role, wallet, exp) plus issuer (`iss`) and
+ * audience (`aud`) so role/wallet identity is never inferred from untrusted
+ * client values.
+ *
+ * @param {string} token - JWT string
+ * @returns {Object} decoded payload
+ * @throws {AppError} 401 when the token is missing/invalid/expired or claims fail
  */
-function authMiddleware(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing authorization header' });
-  }
-
-  const token = header.slice(7);
-
-  // Decode header to find the kid, then try matching key first for efficiency.
-  // Fall back to trying all valid keys so tokens issued before rotation still work.
+function verifyAndDecode(token) {
   const keys = getVerificationKeys();
   let decoded = null;
+  let lastErr = null;
 
-  // Attempt to read kid from token header without verifying (safe — we verify below)
   let preferredKid = null;
   try {
     const unverified = jwt.decode(token, { complete: true });
@@ -35,39 +31,59 @@ function authMiddleware(req, res, next) {
     // ignore — we'll try all keys
   }
 
-  // Sort keys so the one matching kid is tried first
   const ordered = preferredKid
     ? [...keys].sort((a) => (a.kid === preferredKid ? -1 : 1))
     : keys;
 
   for (const key of ordered) {
     try {
-      decoded = jwt.verify(token, key.secret);
+      decoded = jwt.verify(token, key.secret, {
+        issuer: ISSUER,
+        audience: AUDIENCE || undefined,
+      });
       break;
-    } catch (_) {
-      // try next key
+    } catch (err) {
+      lastErr = err;
     }
   }
 
   if (!decoded) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    throw new AppError('unauthorized', 'Invalid or expired token', 401);
   }
 
   // Validate required claims
   const requiredClaims = ['sub', 'role', 'wallet', 'exp'];
   for (const claim of requiredClaims) {
     if (!decoded[claim]) {
-      return res.status(401).json({ error: `Missing or empty claim: ${claim}` });
+      throw new AppError('unauthorized', `Missing or empty claim: ${claim}`, 401);
     }
   }
 
   // Validate role value
   if (!['patient', 'issuer'].includes(decoded.role)) {
-    return res.status(401).json({ error: 'Invalid role claim' });
+    throw new AppError('unauthorized', 'Invalid role claim', 401);
   }
 
-  req.user = decoded;
-  next();
+  return decoded;
+}
+
+/**
+ * JWT authentication middleware.
+ */
+function authMiddleware(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return next(new AppError('unauthorized', 'Missing authorization header', 401));
+  }
+
+  const token = header.slice(7);
+
+  try {
+    req.user = verifyAndDecode(token);
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 /**
@@ -77,48 +93,23 @@ function authMiddleware(req, res, next) {
 function adminAuthMiddleware(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing authorization header' });
+    return next(new AppError('unauthorized', 'Missing authorization header', 401));
   }
 
   const token = header.slice(7);
-  const keys = getVerificationKeys();
-  let decoded = null;
 
-  let preferredKid = null;
   try {
-    const unverified = jwt.decode(token, { complete: true });
-    preferredKid = unverified?.header?.kid || null;
-  } catch (_) {}
-
-  const ordered = preferredKid
-    ? [...keys].sort((a) => (a.kid === preferredKid ? -1 : 1))
-    : keys;
-
-  for (const key of ordered) {
-    try {
-      decoded = jwt.verify(token, key.secret);
-      break;
-    } catch (_) {}
-  }
-
-  if (!decoded) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-
-  const requiredClaims = ['sub', 'role', 'wallet', 'exp'];
-  for (const claim of requiredClaims) {
-    if (!decoded[claim]) {
-      return res.status(401).json({ error: `Missing or empty claim: ${claim}` });
+    const decoded = verifyAndDecode(token);
+    if (!['patient', 'issuer', 'admin'].includes(decoded.role)) {
+      throw new AppError('unauthorized', 'Invalid role claim', 401);
     }
+    req.user = decoded;
+    next();
+  } catch (err) {
+    next(err);
   }
-
-  if (!['patient', 'issuer', 'admin'].includes(decoded.role)) {
-    return res.status(401).json({ error: 'Invalid role claim' });
-  }
-
-  req.user = decoded;
-  next();
 }
 
 module.exports = authMiddleware;
 module.exports.adminAuthMiddleware = adminAuthMiddleware;
+module.exports.verifyAndDecode = verifyAndDecode;

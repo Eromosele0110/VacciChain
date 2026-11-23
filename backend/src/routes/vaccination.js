@@ -6,6 +6,7 @@ const { validateStellarPublicKey } = require('../middleware/wallet');
 const { invokeContract, simulateContract, mintVaccination, sendRpcTimeout, SorobanTimeoutError } = require('../stellar/soroban');
 const { resolveContractErrorMessage, mapContractError } = require('../stellar/contractErrors');
 const { audit } = require('../middleware/auditLog');
+const { AppError } = require('../middleware/errors');
 const validate = require('../middleware/validate');
 const { hasConsented } = require('../indexer/db');
 const { issueSchema, revokeSchema } = require('./schemas/vaccination.schemas');
@@ -255,17 +256,23 @@ router.post(
  *               $ref: '#/components/schemas/Error'
  */
 // GET /vaccination/:wallet — fetch paginated records for a wallet
-router.get('/:wallet', authMiddleware, validateStellarPublicKey('params', 'wallet'), async (req, res) => {
+router.get('/:wallet', authMiddleware, validateStellarPublicKey('params', 'wallet'), async (req, res, next) => {
   const { wallet } = req.params;
+
+  // Object-level authorization (#45): patients may only read their own records;
+  // issuers and admins may read any wallet's records.
+  if (req.user.role === 'patient' && req.user.wallet !== wallet) {
+    return next(new AppError('forbidden', 'Patients may only access their own vaccination records', 403));
+  }
 
   const rawPage = req.query.page !== undefined ? Number(req.query.page) : 1;
   const rawLimit = req.query.limit !== undefined ? Number(req.query.limit) : 20;
 
   if (!Number.isInteger(rawPage) || rawPage < 1) {
-    return res.status(400).json({ error: 'page must be a positive integer' });
+    return next(new AppError('validation_failed', 'page must be a positive integer', 400));
   }
   if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 100) {
-    return res.status(400).json({ error: 'limit must be an integer between 1 and 100' });
+    return next(new AppError('validation_failed', 'limit must be an integer between 1 and 100', 400));
   }
 
   try {
@@ -281,7 +288,7 @@ router.get('/:wallet', authMiddleware, validateStellarPublicKey('params', 'walle
   } catch (err) {
     if (err instanceof SorobanTimeoutError) return sendRpcTimeout(res);
     const errorMessage = resolveContractErrorMessage(err);
-    res.status(500).json({ error: errorMessage });
+    next(new AppError('rpc_error', errorMessage, 500));
   }
 });
 

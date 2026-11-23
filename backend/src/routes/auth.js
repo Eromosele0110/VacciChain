@@ -6,7 +6,8 @@ const { sep10Limiter } = require('../middleware/rateLimiter');
 const { audit } = require('../middleware/auditLog');
 const validate = require('../middleware/validate');
 const { bruteForceGuard, recordFailure, recordSuccess } = require('../middleware/bruteForce');
-const { getSigningKey } = require('../jwtKeys');
+const { getSigningKey, ISSUER, AUDIENCE } = require('../jwtKeys');
+const { AppError } = require('../middleware/errors');
 const { sep10Schema, verifySchema } = require('./schemas/auth.schemas');
 
 const router = express.Router();
@@ -51,14 +52,14 @@ const router = express.Router();
  *       500:
  *         description: Internal server error
  */
-router.post('/sep10', sep10Limiter, validate(sep10Schema), async (req, res) => {
+router.post('/sep10', sep10Limiter, validate(sep10Schema), async (req, res, next) => {
   const { public_key } = req.body;
 
   try {
     const { transaction, nonce } = await buildChallenge(public_key);
     res.json({ transaction, nonce });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(new AppError('rpc_error', 'Failed to build SEP-10 challenge', 500));
   }
 });
 
@@ -126,7 +127,8 @@ router.post('/verify', validate(verifySchema), bruteForceGuard, (req, res) => {
     const token = jwt.sign(
       {
         sub: publicKey,
-        iss: process.env.HOME_DOMAIN || 'localhost',
+        iss: ISSUER,
+        aud: AUDIENCE || undefined,
         iat: now,
         wallet: publicKey,
         publicKey,
@@ -152,7 +154,7 @@ router.post('/verify', validate(verifySchema), bruteForceGuard, (req, res) => {
     if (wallet) recordFailure(`wallet:${wallet}`, { ip, wallet });
 
     audit({ actor: wallet || 'unknown', action: 'auth.login', result: 'failure', meta: { error: err.message } });
-    res.status(401).json({ error: err.message });
+    next(new AppError('unauthorized', 'Invalid signature or nonce mismatch', 401));
   }
 });
 

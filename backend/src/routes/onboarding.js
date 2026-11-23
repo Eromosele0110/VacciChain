@@ -23,6 +23,103 @@ const { applySchema, reviewSchema } = require('./schemas/onboarding.schemas');
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /v1/onboarding/apply:
+ *   post:
+ *     summary: Submit an issuer onboarding application
+ *     tags:
+ *       - Onboarding
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - license_number
+ *               - country
+ *               - wallet
+ *             properties:
+ *               name:
+ *                 type: string
+ *               license_number:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *               wallet:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Application submitted
+ *       401:
+ *         description: Unauthorized
+ *       409:
+ *         description: Pending application already exists
+ */
+
+/**
+ * @swagger
+ * /v1/onboarding/applications:
+ *   get:
+ *     summary: List issuer onboarding applications
+ *     tags:
+ *       - Onboarding
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [pending, approved, rejected] }
+ *     responses:
+ *       200:
+ *         description: Application list
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - admin required
+ */
+
+/**
+ * @swagger
+ * /v1/onboarding/applications/{id}/review:
+ *   post:
+ *     summary: Approve or reject an onboarding application
+ *     tags:
+ *       - Onboarding
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - decision
+ *             properties:
+ *               decision:
+ *                 type: string
+ *                 enum: [approved, rejected]
+ *               reviewer_note:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Application reviewed
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - admin required
+ */
+
 function adminOnly(req, res, next) {
   if (req.user?.role !== 'issuer') {
     return res.status(403).json({ error: 'Admin access required' });
