@@ -1,17 +1,26 @@
+import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import Landing from './pages/Landing';
-import PatientDashboard from './pages/PatientDashboard';
-import IssuerDashboard from './pages/IssuerDashboard';
-import VerifyPage from './pages/VerifyPage';
-import AdminDashboard from './pages/AdminDashboard';
-import IssuerOnboarding from './pages/IssuerOnboarding';
-import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import { AuthProvider } from './hooks/useFreighter';
 import { useDarkMode } from './hooks/useDarkMode';
 import FreighterBanner from './components/FreighterBanner';
 import DemoBanner from './components/DemoBanner';
 import NavBar from './components/NavBar';
 import SkipToContent from './components/SkipToContent';
+import ErrorBoundary from './components/ErrorBoundary';
+
+const Landing = lazy(() => import('./pages/Landing'));
+const PatientDashboard = lazy(() => import('./pages/PatientDashboard'));
+const IssuerDashboard = lazy(() => import('./pages/IssuerDashboard'));
+const VerifyPage = lazy(() => import('./pages/VerifyPage'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const IssuerOnboarding = lazy(() => import('./pages/IssuerOnboarding'));
+const AnalyticsDashboard = lazy(() => import('./pages/AnalyticsDashboard'));
+
+const Fallback = () => (
+  <div style={{ maxWidth: 500, margin: '4rem auto', padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
+    Loading…
+  </div>
+);
 
 export default function App() {
   const [dark, setDark] = useDarkMode();
@@ -24,13 +33,40 @@ export default function App() {
       <FreighterBanner />
       <main id="main-content" tabIndex={-1} style={{ outline: 'none' }}>
         <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/patient" element={<PatientDashboard />} />
-          <Route path="/issuer" element={<IssuerDashboard />} />
-          <Route path="/verify" element={<VerifyPage />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/apply" element={<IssuerOnboarding />} />
-          <Route path="/analytics" element={<AnalyticsDashboard />} />
+          <Route path="/" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><Landing /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/patient" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><PatientDashboard /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/issuer" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><IssuerDashboard /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/verify" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><VerifyPage /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/admin" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><AdminDashboard /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/apply" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><IssuerOnboarding /></ErrorBoundary>
+          } />
+          <Route path="/analytics" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><AnalyticsDashboard /></ErrorBoundary>
+            </Suspense>
+          } />
         </Routes>
       </main>
     </AuthProvider>
