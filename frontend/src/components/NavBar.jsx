@@ -231,6 +231,17 @@ export default function NavBar({ dark, onToggleDark }) {
             gap: 0.75rem;
           }
         }
+
+        /* Reduced motion: disable any nav transitions/animations (menu open/close, focus) */
+        @media (prefers-reduced-motion: reduce) {
+          .nav-hamburger,
+          .nav-links,
+          .nav-links a,
+          .nav-links button {
+            transition: none !important;
+            animation: none !important;
+          }
+        }
       `}</style>
     </nav>
   );
