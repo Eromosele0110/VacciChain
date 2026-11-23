@@ -21,6 +21,16 @@ target/
 *.log
 npm-debug.log*
 
+# Test snapshots and coverage artefacts — never commit test output
+**/__snapshots__/
+*.snap
+coverage/
+coverage.lcov
+*.lcov
+vitest-results/
+test-results/
+jest-stdout.json
+
 # OS
 .DS_Store
 Thumbs.db

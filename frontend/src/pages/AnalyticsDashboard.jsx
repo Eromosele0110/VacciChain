@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../hooks/useFreighter';
 
-const ANALYTICS_BASE = import.meta.env.VITE_ANALYTICS_URL || 'http://localhost:8001';
 const REFRESH_INTERVAL = 60_000;
+
+// Analytics is reached through the backend proxy (#37) so the internal
+// analytics service is never called directly from the browser.
+const ANALYTICS_PREFIX = '/v1/analytics';
 
 const s = {
   page: { maxWidth: 900, width: '100%', margin: '2rem auto', padding: '0 1rem', boxSizing: 'border-box' },
@@ -121,9 +124,9 @@ export default function AnalyticsDashboard() {
     setError(null);
     try {
       const [ratesRes, issuersRes, anomaliesRes] = await Promise.all([
-        fetch(`${ANALYTICS_BASE}/analytics/rates`),
-        fetch(`${ANALYTICS_BASE}/analytics/issuers`),
-        fetch(`${ANALYTICS_BASE}/analytics/anomalies`),
+        fetch(`${ANALYTICS_PREFIX}/rates`),
+        fetch(`${ANALYTICS_PREFIX}/issuers`),
+        fetch(`${ANALYTICS_PREFIX}/anomalies`),
       ]);
 
       const [ratesData, issuersData, anomaliesData] = await Promise.all([

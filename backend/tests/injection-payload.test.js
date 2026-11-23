@@ -31,11 +31,11 @@ describe('Injection Payload Security Tests', () => {
       "') UNION ALL SELECT NULL--",
     ];
 
-    describe('POST /vaccination/issue - patient_address', () => {
+    describe('POST /v1/vaccination/issue - patient_address', () => {
       sqlInjectionPayloads.forEach((payload) => {
         it(`should reject SQL injection: ${payload}`, async () => {
           const res = await request(app)
-            .post('/vaccination/issue')
+            .post('/v1/vaccination/issue')
             .set('Authorization', `Bearer ${issuerToken}`)
             .send({
               patient_address: payload,
@@ -76,11 +76,11 @@ describe('Injection Payload Security Tests', () => {
       });
     });
 
-    describe('POST /onboarding/apply - wallet field', () => {
+    describe('POST /v1/onboarding/apply - wallet field', () => {
       sqlInjectionPayloads.forEach((payload) => {
         it(`should reject SQL injection: ${payload}`, async () => {
           const res = await request(app)
-            .post('/onboarding/apply')
+            .post('/v1/onboarding/apply')
             .set('Authorization', `Bearer ${patientToken}`)
             .send({
               wallet: payload,
@@ -110,11 +110,11 @@ describe('Injection Payload Security Tests', () => {
       '; exec sh',
     ];
 
-    describe('POST /vaccination/issue - vaccine_name', () => {
+    describe('POST /v1/vaccination/issue - vaccine_name', () => {
       commandInjectionPayloads.forEach((payload) => {
         it(`should reject command injection: ${payload}`, async () => {
           const res = await request(app)
-            .post('/vaccination/issue')
+            .post('/v1/vaccination/issue')
             .set('Authorization', `Bearer ${issuerToken}`)
             .send({
               patient_address: validWallet,
@@ -132,11 +132,11 @@ describe('Injection Payload Security Tests', () => {
       });
     });
 
-    describe('POST /onboarding/apply - name field', () => {
+    describe('POST /v1/onboarding/apply - name field', () => {
       commandInjectionPayloads.forEach((payload) => {
         it(`should reject command injection: ${payload}`, async () => {
           const res = await request(app)
-            .post('/onboarding/apply')
+            .post('/v1/onboarding/apply')
             .set('Authorization', `Bearer ${patientToken}`)
             .send({
               wallet: validWallet,
@@ -169,11 +169,11 @@ describe('Injection Payload Security Tests', () => {
       '<%=require("child_process").exec("id")%>',
     ];
 
-    describe('POST /vaccination/issue - vaccine_name', () => {
+    describe('POST /v1/vaccination/issue - vaccine_name', () => {
       templateInjectionPayloads.forEach((payload) => {
         it(`should reject template injection: ${payload}`, async () => {
           const res = await request(app)
-            .post('/vaccination/issue')
+            .post('/v1/vaccination/issue')
             .set('Authorization', `Bearer ${issuerToken}`)
             .send({
               patient_address: validWallet,
@@ -204,11 +204,11 @@ describe('Injection Payload Security Tests', () => {
       '<!--<script>alert(1)</script>-->',
     ];
 
-    describe('POST /vaccination/issue - vaccine_name', () => {
+    describe('POST /v1/vaccination/issue - vaccine_name', () => {
       xssPayloads.forEach((payload) => {
         it(`should sanitize XSS: ${payload}`, async () => {
           const res = await request(app)
-            .post('/vaccination/issue')
+            .post('/v1/vaccination/issue')
             .set('Authorization', `Bearer ${issuerToken}`)
             .send({
               patient_address: validWallet,
@@ -224,11 +224,11 @@ describe('Injection Payload Security Tests', () => {
       });
     });
 
-    describe('POST /onboarding/apply - name field', () => {
+    describe('POST /v1/onboarding/apply - name field', () => {
       xssPayloads.forEach((payload) => {
         it(`should sanitize XSS: ${payload}`, async () => {
           const res = await request(app)
-            .post('/onboarding/apply')
+            .post('/v1/onboarding/apply')
             .set('Authorization', `Bearer ${patientToken}`)
             .send({
               wallet: validWallet,
@@ -329,12 +329,12 @@ describe('Injection Payload Security Tests', () => {
   describe('Control Character Injection', () => {
     const controlCharPayloads = Array.from({ length: 32 }, (_, i) => String.fromCharCode(i));
 
-    describe('POST /onboarding/apply - name field with control chars', () => {
+    describe('POST /v1/onboarding/apply - name field with control chars', () => {
       controlCharPayloads.forEach((controlChar) => {
         it(`should reject control character 0x${controlChar.charCodeAt(0).toString(16).padStart(2, '0')}`, async () => {
           const payload = `John${controlChar}Doe`;
           const res = await request(app)
-            .post('/onboarding/apply')
+            .post('/v1/onboarding/apply')
             .set('Authorization', `Bearer ${patientToken}`)
             .send({
               wallet: validWallet,
@@ -360,11 +360,11 @@ describe('Injection Payload Security Tests', () => {
       'name%00injection',
     ];
 
-    describe('POST /vaccination/issue', () => {
+    describe('POST /v1/vaccination/issue', () => {
       nullBytePayloads.forEach((payload) => {
         it(`should reject null byte in vaccine_name: ${JSON.stringify(payload)}`, async () => {
           const res = await request(app)
-            .post('/vaccination/issue')
+            .post('/v1/vaccination/issue')
             .set('Authorization', `Bearer ${issuerToken}`)
             .send({
               patient_address: validWallet,
@@ -411,11 +411,11 @@ describe('Injection Payload Security Tests', () => {
       '2025-01-01T25:99:99Z',
     ];
 
-    describe('POST /vaccination/issue - date_administered', () => {
+    describe('POST /v1/vaccination/issue - date_administered', () => {
       dateInjectionPayloads.forEach((payload) => {
         it(`should reject malformed date: ${payload}`, async () => {
           const res = await request(app)
-            .post('/vaccination/issue')
+            .post('/v1/vaccination/issue')
             .set('Authorization', `Bearer ${issuerToken}`)
             .send({
               patient_address: validWallet,
@@ -440,11 +440,11 @@ describe('Injection Payload Security Tests', () => {
       'admin*))%00',
     ];
 
-    describe('POST /onboarding/apply - license_number', () => {
+    describe('POST /v1/onboarding/apply - license_number', () => {
       ldapInjectionPayloads.forEach((payload) => {
         it(`should reject LDAP injection: ${payload}`, async () => {
           const res = await request(app)
-            .post('/onboarding/apply')
+            .post('/v1/onboarding/apply')
             .set('Authorization', `Bearer ${patientToken}`)
             .send({
               wallet: validWallet,
@@ -470,11 +470,11 @@ describe('Injection Payload Security Tests', () => {
       '{"$or": [{}]}',
     ];
 
-    describe('POST /vaccination/issue - JSON serialization', () => {
+    describe('POST /v1/vaccination/issue - JSON serialization', () => {
       noSqlPayloads.forEach((payload) => {
         it(`should safely handle NoSQL-like payload: ${JSON.stringify(payload)}`, async () => {
           const res = await request(app)
-            .post('/vaccination/issue')
+            .post('/v1/vaccination/issue')
             .set('Authorization', `Bearer ${issuerToken}`)
             .send({
               patient_address: validWallet,
@@ -497,11 +497,11 @@ describe('Injection Payload Security Tests', () => {
       'x'.repeat(10000),
     ];
 
-    describe('POST /onboarding/apply - name field', () => {
+    describe('POST /v1/onboarding/apply - name field', () => {
       redosPayloads.forEach((payload) => {
         it(`should handle ReDoS payload: length=${payload.length}`, async () => {
           const res = await request(app)
-            .post('/onboarding/apply')
+            .post('/v1/onboarding/apply')
             .set('Authorization', `Bearer ${patientToken}`)
             .send({
               wallet: validWallet,
@@ -528,7 +528,7 @@ describe('Injection Payload Security Tests', () => {
       contractInjectionPayloads.forEach((payload) => {
         it(`should reject invalid contract ID: ${payload.substring(0, 30)}...`, async () => {
           const res = await request(app)
-            .post('/vaccination/issue')
+            .post('/v1/vaccination/issue')
             .set('Authorization', `Bearer ${issuerToken}`)
             .query({ contract_id: payload })
             .send({

@@ -17,6 +17,7 @@ const eventsRoutes = require('./routes/events');
 const patientRoutes = require('./routes/patient');
 const consentRoutes = require('./routes/consent');
 const onboardingRoutes = require('./routes/onboarding');
+const analyticsRoutes = require('./routes/analytics');
 const apiVersion = require('./middleware/apiVersion');
 const securityHeaders = require('./middleware/securityHeaders');
 const { getRpcServer } = require('./stellar/soroban');
@@ -63,12 +64,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/auth', authRoutes);
-app.use('/vaccination', vaccinationRoutes);
-app.use('/verify', verifyRoutes);
-app.use('/admin', adminRoutes);
-app.use('/events', eventsRoutes);
-
 // v1 routes — all API endpoints are versioned under /v1/
 const v1 = express.Router();
 v1.use(apiVersion);
@@ -80,10 +75,13 @@ v1.use('/patient', patientRoutes);
 v1.use('/patient', consentRoutes);
 v1.use('/events', eventsRoutes);
 v1.use('/onboarding', onboardingRoutes);
+v1.use('/analytics', analyticsRoutes);
 app.use('/v1', v1);
 
-// Legacy unversioned routes — 308 redirect to /v1/ with Deprecation header
-app.use(['/auth', '/vaccination', '/verify', '/admin', '/patient', '/events'], (req, res) => {
+// Legacy unversioned routes — 308 redirect to /v1/ with Deprecation header.
+// Every canonical /v1 route has a corresponding legacy redirect so legacy
+// callers are never served by a conflicting duplicate handler.
+app.use(['/auth', '/vaccination', '/verify', '/admin', '/patient', '/events', '/onboarding', '/analytics'], (req, res) => {
   res.setHeader('Deprecation', 'true');
   res.redirect(308, `/v1${req.originalUrl}`);
 });
