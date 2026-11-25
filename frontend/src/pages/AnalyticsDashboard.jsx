@@ -1,7 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../hooks/useFreighter';
 
-const ANALYTICS_BASE = import.meta.env.VITE_ANALYTICS_URL || 'http://localhost:8001';
+// Same-origin: the edge proxy forwards /analytics/* to the internal service.
+async function readJson(res) {
+  if (res.status === 401 || res.status === 403) throw new Error('You are not authorized to view analytics.');
+  if (!res.ok) throw new Error('Analytics service is unavailable. Please try again later.');
+  try {
+    return await res.json();
+  } catch {
+    throw new Error('Analytics service returned an invalid response.');
+  }
+}
+
+const normalizeRates = ({ rates = [] }) => (Array.isArray(rates)
+  ? rates
+  : Object.entries(rates).map(([vaccine_name, count]) => ({ vaccine_name, count })));
+
+const normalizeIssuer = (i) => ({ ...i, address: i.address ?? i.issuer, count: i.count ?? i.total_issued });
 const REFRESH_INTERVAL = 60_000;
 
 const s = {
@@ -72,7 +87,7 @@ function IssuerTable({ data }) {
               {issuer.address.slice(0, 8)}…{issuer.address.slice(-6)}
             </td>
             <td style={s.td}>{issuer.count}</td>
-            <td style={s.td}>{issuer.last_active ? new Date(issuer.last_active).toLocaleString() : '—'}</td>
+            <td style={s.td}>{issuer.last_active ? new Date(issuer.last_active).toLocaleString() : issuer.last_ledger ? `Ledger ${issuer.last_ledger}` : '—'}</td>
           </tr>
         ))}
       </tbody>
@@ -120,34 +135,27 @@ export default function AnalyticsDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [ratesRes, issuersRes, anomaliesRes] = await Promise.all([
-        fetch(`${ANALYTICS_BASE}/analytics/rates`),
-        fetch(`${ANALYTICS_BASE}/analytics/issuers`),
-        fetch(`${ANALYTICS_BASE}/analytics/anomalies`),
-      ]);
+      const [ratesData, issuersData, anomaliesData] = await Promise.all(
+        ['rates', 'issuers', 'anomalies'].map(async (name) => readJson(await apiFetch(`/analytics/${name}`)))
+      );
 
-      const [ratesData, issuersData, anomaliesData] = await Promise.all([
-        ratesRes.json(),
-        issuersRes.json(),
-        anomaliesRes.json(),
-      ]);
-
-      setRates(ratesData.rates ?? ratesData);
-      setIssuers(issuersData.issuers ?? issuersData);
-      setAnomalies(anomaliesData.anomalies ?? anomaliesData);
+      setRates(normalizeRates(ratesData));
+      setIssuers((issuersData.issuers ?? []).map(normalizeIssuer));
+      setAnomalies((anomaliesData.flagged_issuers ?? anomaliesData.anomalies ?? []).map(normalizeIssuer));
       setLastRefresh(new Date());
     } catch (e) {
-      setError('Failed to load analytics data. Is the analytics service running?');
+      setError(e.message || 'Failed to load analytics data.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiFetch]);
 
   useEffect(() => {
+    if (role !== 'issuer') return undefined;
     fetchAll();
     timerRef.current = setInterval(fetchAll, REFRESH_INTERVAL);
     return () => clearInterval(timerRef.current);
-  }, [fetchAll]);
+  }, [fetchAll, role]);
 
   if (role !== 'issuer') {
     return (

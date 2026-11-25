@@ -1,36 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import CopyButton from './CopyButton';
 import NFTCardSkeleton from './NFTCardSkeleton';
+import { exportCertificate } from '../utils/certificate';
 
-async function exportCertificate(record) {
-  const [{ jsPDF }, QRCode] = await Promise.all([
-    import('jspdf'),
-    import('qrcode'),
-  ]);
-
-  const verifyUrl = `${window.location.origin}/verify/${record.issuer}`;
-  const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 128, margin: 1 });
-
-  const doc = new jsPDF();
-  doc.setFontSize(20);
-  doc.text('VacciChain Vaccination Certificate', 105, 20, { align: 'center' });
-
-  doc.setFontSize(12);
-  doc.text(`Vaccine: ${record.vaccine_name}`, 20, 45);
-  doc.text(`Date Administered: ${record.date_administered}`, 20, 57);
-  doc.text(`Issuer: ${record.issuer?.slice(0, 8)}…${record.issuer?.slice(-4)}`, 20, 69);
-  doc.text(`Wallet: ${record.patient?.slice(0, 8) ?? 'N/A'}…${record.patient?.slice(-4) ?? ''}`, 20, 81);
-  doc.text(`Token ID: #${record.token_id}`, 20, 93);
-
-  doc.addImage(qrDataUrl, 'PNG', 150, 40, 40, 40);
-  doc.setFontSize(8);
-  doc.text('Scan to verify on-chain', 155, 84);
-
-  const safeName = record.vaccine_name.replace(/\s+/g, '_');
-  doc.save(`VacciChain_${safeName}_${record.date_administered}.pdf`);
-}
-
-export default function NFTCard({ record, onClick, loading = false }) {
+export default function NFTCard({ record, patientWallet, onClick, loading = false }) {
   const { t } = useTranslation();
 
   if (loading) return <NFTCardSkeleton count={1} />;
@@ -62,8 +35,12 @@ export default function NFTCard({ record, onClick, loading = false }) {
           💉 {record.vaccine_name}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {record.dose_number == null && record.dose_series != null && (
+            <span style={{ fontSize: '0.72rem', color: '#93c5fd' }}>{record.dose_series}-dose series</span>
+          )}
           {record.dose_number != null && (
             <span
+              role="img"
               aria-label={`Dose ${record.dose_number}${record.dose_series != null ? ` of ${record.dose_series}` : ''}`}
               style={{
                 fontSize: '0.72rem',
@@ -98,7 +75,7 @@ export default function NFTCard({ record, onClick, loading = false }) {
       </p>
       <button
         aria-label={`Export certificate for ${record.vaccine_name}`}
-        onClick={(e) => { e.stopPropagation(); exportCertificate(record); }}
+        onClick={(e) => { e.stopPropagation(); exportCertificate(record, patientWallet); }}
         style={{
           marginTop: '0.75rem',
           padding: '0.35rem 0.85rem',

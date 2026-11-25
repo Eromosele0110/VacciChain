@@ -24,7 +24,9 @@ const styles = {
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 const today = () => new Date().toISOString().split('T')[0];
 const FORM_KEY = 'issuer_form_draft';
-const EMPTY_FORM = { patient_address: '', vaccine_name: '', date_administered: '' };
+const EMPTY_FORM = { patient_address: '', vaccine_name: '', date_administered: '', dose_number: '', dose_series: '' };
+const MAX_U32 = 4294967295;
+const isValidDose = (value) => /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= MAX_U32;
 
 export default function IssuerDashboard() {
   const { t } = useTranslation();
@@ -34,7 +36,7 @@ export default function IssuerDashboard() {
   const [form, setForm] = useState(() => {
     try {
       const saved = sessionStorage.getItem(FORM_KEY);
-      return saved ? JSON.parse(saved) : EMPTY_FORM;
+      return saved ? { ...EMPTY_FORM, ...JSON.parse(saved) } : EMPTY_FORM;
     } catch {
       return EMPTY_FORM;
     }
@@ -56,6 +58,12 @@ export default function IssuerDashboard() {
       errors.date_administered = t('issuer.validation.dateRequired');
     else if (f.date_administered > today())
       errors.date_administered = t('issuer.validation.dateFuture');
+    for (const key of ['dose_number', 'dose_series']) {
+      if (f[key] && !isValidDose(f[key])) errors[key] = t('issuer.validation.dosePositive');
+    }
+    if (f.dose_number && f.dose_series && !errors.dose_number && !errors.dose_series
+      && Number(f.dose_number) > Number(f.dose_series))
+      errors.dose_number = t('issuer.validation.doseExceedsSeries');
     return errors;
   };
 
@@ -95,7 +103,11 @@ export default function IssuerDashboard() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const result = await issueVaccination(form);
+    if (errors.dose_number || errors.dose_series) return;
+    const { dose_number, dose_series, ...payload } = form;
+    if (dose_number) payload.dose_number = Number(dose_number);
+    if (dose_series) payload.dose_series = Number(dose_series);
+    const result = await issueVaccination(payload);
     if (result) {
       setMintResult(result);
       setForm(EMPTY_FORM);
@@ -122,7 +134,9 @@ export default function IssuerDashboard() {
           { key: 'patient_address', label: 'Patient Stellar Address', placeholder: 'G...' },
           { key: 'vaccine_name', label: 'Vaccine Name', placeholder: 'e.g. COVID-19' },
           { key: 'date_administered', label: 'Date Administered', placeholder: 'YYYY-MM-DD' },
-        ].map(({ key, label, placeholder }) => (
+          { key: 'dose_number', label: 'Dose Number (optional)', placeholder: 'e.g. 1', optional: true },
+          { key: 'dose_series', label: 'Doses in Series (optional)', placeholder: 'e.g. 2', optional: true },
+        ].map(({ key, label, placeholder, optional }) => (
           <div key={key}>
             <label htmlFor={key} style={styles.label}>{label}</label>
             <input
@@ -131,9 +145,12 @@ export default function IssuerDashboard() {
               placeholder={placeholder}
               value={form[key]}
               onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-              required
+              required={!optional}
+              inputMode={optional ? 'numeric' : undefined}
+              aria-invalid={!!errors[key]}
+              aria-describedby={errors[key] ? `${key}-error` : undefined}
             />
-            {errors[key] && <p style={styles.fieldError}>{errors[key]}</p>}
+            {errors[key] && <p id={`${key}-error`} style={styles.fieldError}>{errors[key]}</p>}
           </div>
         ))}
         <button style={isAuthorized ? styles.btn : styles.btnDisabled} type="submit" disabled={loading || !isAuthorized} aria-disabled={loading || !isAuthorized}>
