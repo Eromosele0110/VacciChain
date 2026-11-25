@@ -30,6 +30,7 @@ const app = express();
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
 
 app.use(cors({
+  exposedHeaders: ['API-Version', 'Deprecation', 'Link'],
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin || allowedOrigins.includes(origin)) {
@@ -63,12 +64,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/auth', authRoutes);
-app.use('/vaccination', vaccinationRoutes);
-app.use('/verify', verifyRoutes);
-app.use('/admin', adminRoutes);
-app.use('/events', eventsRoutes);
-
 // v1 routes — all API endpoints are versioned under /v1/
 const v1 = express.Router();
 v1.use(apiVersion);
@@ -82,11 +77,18 @@ v1.use('/events', eventsRoutes);
 v1.use('/onboarding', onboardingRoutes);
 app.use('/v1', v1);
 
-// Legacy unversioned routes — 308 redirect to /v1/ with Deprecation header
-app.use(['/auth', '/vaccination', '/verify', '/admin', '/patient', '/events'], (req, res) => {
-  res.setHeader('Deprecation', 'true');
-  res.redirect(308, `/v1${req.originalUrl}`);
-});
+// Legacy unversioned routes: 308 (method and body preserved) to /v1. No handlers are
+// mounted here, so both forms always reach the same code. See docs/api-routes.md.
+app.use(
+  ['/auth', '/vaccination', '/verify', '/admin', '/patient', '/events', '/onboarding'],
+  apiVersion,
+  (req, res) => {
+    const target = `/v1${req.originalUrl}`;
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', `<${encodeURI(target)}>; rel="successor-version"`);
+    res.redirect(308, target);
+  }
+);
 
 // Global error handler — must be registered after all routes
 app.use(errorHandler);

@@ -29,6 +29,9 @@ function adminOnly(req, res, next) {
   }
   next();
 }
+
+/**
+ * POST /onboarding/apply
  * Any authenticated user can submit an onboarding request.
  */
 router.post('/apply', authMiddleware, validate(applySchema), async (req, res) => {

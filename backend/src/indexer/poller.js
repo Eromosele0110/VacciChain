@@ -6,6 +6,7 @@
  */
 const StellarSdk = require('@stellar/stellar-sdk');
 const { upsertEvents, getLatestLedger } = require('./db');
+const { toIndexedMint } = require('../schemas/vaccinationRecord');
 const { invalidateCache } = require('../stellar/issuerCache');
 
 
@@ -44,7 +45,7 @@ function parseEvent(raw) {
         ? Math.floor(new Date(raw.ledgerClosedAt).getTime() / 1000)
         : 0,
       contract_id: raw.contractId ?? CONTRACT_ID,
-      payload: raw.value ?? {},
+      payload: event_type === 'VaccinationMinted' ? toIndexedMint(raw.value) : (raw.value ?? {}),
     };
 
     // Extract issuer address from topics for IssuerAdded/Revoked events

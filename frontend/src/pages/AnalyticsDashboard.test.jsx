@@ -99,4 +99,47 @@ describe('AnalyticsDashboard', () => {
     expect(screen.getByText('high')).toBeInTheDocument();
     expect(screen.getByText('Spike detected')).toBeInTheDocument();
   });
+
+  const serve = (bodies) => {
+    useAuth.mockReturnValue({ role: 'issuer' });
+    global.fetch = jest.fn((url) => Promise.resolve({ ok: true, json: () => Promise.resolve(bodies[url.split('/').pop()]) }));
+  };
+
+  it('reads the analytics service shape and gives charts names and a table', async () => {
+    serve({
+      rates: { rates: { Flu: 0, MMR: 5 }, total_mints: 5 },
+      issuers: { issuers: [{ issuer: 'GABCDEFGHIJKLMNOP', total_issued: 5, last_ledger: 9 }] },
+      anomalies: { flagged_issuers: [{ issuer: 'GABCDEFGHIJKLMNOP', total_issued: 77 }] },
+    });
+    await act(async () => { render(<AnalyticsDashboard />); });
+    expect(screen.getByRole('img', { name: 'MMR: 5 of 5 doses' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Flu: 0 of 5 doses' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Vaccination doses by vaccine type' })).toBeInTheDocument();
+    expect(screen.getByText('Ledger 9')).toBeInTheDocument();
+    expect(screen.getByText('77')).toBeInTheDocument();
+  });
+
+  it('distinguishes missing counts and empty lists from zero', async () => {
+    serve({ rates: { rates: [{ vaccine_name: 'MMR', count: null }] }, issuers: { issuers: [] }, anomalies: { flagged_issuers: [] } });
+    await act(async () => { render(<AnalyticsDashboard />); });
+    expect(screen.getByRole('cell', { name: 'Not reported' })).toBeInTheDocument();
+    expect(screen.getByText(/No issuers have minted/)).toBeInTheDocument();
+  });
+
+  it('marks HTTP failures unavailable, not empty', async () => {
+    useAuth.mockReturnValue({ role: 'issuer' });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) });
+    await act(async () => { render(<AnalyticsDashboard />); });
+    expect(screen.getAllByText(/Data unavailable/)).toHaveLength(3);
+    expect(screen.queryByText(/No anomalies/)).toBeNull();
+  });
+
+  it('keeps old data and marks it delayed when a refresh fails', async () => {
+    serve({ rates: mockRates, issuers: mockIssuers, anomalies: mockAnomalies });
+    await act(async () => { render(<AnalyticsDashboard />); });
+    global.fetch = jest.fn().mockRejectedValue(new Error('down'));
+    await act(async () => { jest.advanceTimersByTime(60_000); });
+    expect(screen.getAllByText(/Delayed: showing data from/)).toHaveLength(3);
+    expect(screen.getByText('COVID-19')).toBeInTheDocument();
+  });
 });

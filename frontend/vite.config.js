@@ -4,12 +4,13 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
 
+  // The manifest feeds scripts/bundle-report.mjs.
+  build: { manifest: true },
+
   server: {
     port: 3000,
     proxy: {
-      '/auth': 'http://backend:4000',
-      '/vaccination': 'http://backend:4000',
-      '/verify': 'http://backend:4000',
+      '/v1': 'http://backend:4000',
     },
   },
 

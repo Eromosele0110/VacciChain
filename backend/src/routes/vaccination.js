@@ -8,6 +8,7 @@ const { resolveContractErrorMessage, mapContractError } = require('../stellar/co
 const { audit } = require('../middleware/auditLog');
 const validate = require('../middleware/validate');
 const { hasConsented } = require('../indexer/db');
+const { toApiRecords } = require('../schemas/vaccinationRecord');
 const { issueSchema, revokeSchema } = require('./schemas/vaccination.schemas');
 
 const router = express.Router();
@@ -275,7 +276,7 @@ router.get('/:wallet', authMiddleware, validateStellarPublicKey('params', 'walle
 
     const total = allRecords.length;
     const start = (rawPage - 1) * rawLimit;
-    const data = allRecords.slice(start, start + rawLimit);
+    const data = toApiRecords(allRecords.slice(start, start + rawLimit));
 
     res.json({ data, total, page: rawPage, limit: rawLimit });
   } catch (err) {
