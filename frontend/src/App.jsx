@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './hooks/useFreighter';
 import { useDarkMode } from './hooks/useDarkMode';
@@ -7,6 +7,7 @@ import DemoBanner from './components/DemoBanner';
 import NavBar from './components/NavBar';
 import SkipToContent from './components/SkipToContent';
 import ErrorBoundary from './components/ErrorBoundary';
+import NotFoundPage from './pages/NotFoundPage';
 
 const Landing = lazy(() => import('./pages/Landing'));
 const PatientDashboard = lazy(() => import('./pages/PatientDashboard'));
@@ -24,6 +25,15 @@ const Fallback = () => (
 
 export default function App() {
   const [dark, setDark] = useDarkMode();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dark) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [dark]);
 
   return (
     <AuthProvider>
@@ -61,12 +71,14 @@ export default function App() {
           <Route path="/apply" element={
             <Suspense fallback={<Fallback />}>
               <ErrorBoundary><IssuerOnboarding /></ErrorBoundary>
+            </Suspense>
           } />
           <Route path="/analytics" element={
             <Suspense fallback={<Fallback />}>
               <ErrorBoundary><AnalyticsDashboard /></ErrorBoundary>
             </Suspense>
           } />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
     </AuthProvider>
