@@ -40,13 +40,41 @@ export default function App() {
         <ChunkErrorBoundary key={pathname}>
         <Suspense fallback={<p role="status" style={{ textAlign: 'center', padding: '2rem' }}>Loading page…</p>}>
         <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/patient" element={<PatientDashboard />} />
-          <Route path="/issuer" element={<IssuerDashboard />} />
-          <Route path="/verify" element={<VerifyPage />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/apply" element={<IssuerOnboarding />} />
-          <Route path="/analytics" element={<AnalyticsDashboard />} />
+          <Route path="/" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><Landing /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/patient" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><PatientDashboard /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/issuer" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><IssuerDashboard /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/verify" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><VerifyPage /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/admin" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><AdminDashboard /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/apply" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><IssuerOnboarding /></ErrorBoundary>
+            </Suspense>
+          } />
+          <Route path="/analytics" element={
+            <Suspense fallback={<Fallback />}>
+              <ErrorBoundary><AnalyticsDashboard /></ErrorBoundary>
+            </Suspense>
+          } />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </Suspense>
