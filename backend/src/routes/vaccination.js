@@ -1,6 +1,7 @@
 const express = require('express');
 const StellarSdk = require('@stellar/stellar-sdk');
 const authMiddleware = require('../middleware/auth');
+const { adminAuthMiddleware, requireWalletAccess } = require('../middleware/auth');
 const issuerMiddleware = require('../middleware/issuer');
 const { validateStellarPublicKey } = require('../middleware/wallet');
 const { invokeContract, simulateContract, mintVaccination, sendRpcTimeout, SorobanTimeoutError } = require('../stellar/soroban');
@@ -372,10 +373,12 @@ router.post('/batch-verify', authMiddleware, batchVerifyLimiter, async (req, res
 });
 
 // GET /vaccination/:wallet — fetch paginated records for a wallet
+// #45: patients may only read their own wallet; issuers (re-verified on-chain) and admins may read any.
 router.get(
   '/:wallet',
-  authMiddleware,
+  adminAuthMiddleware,
   validateStellarPublicKey('params', 'wallet'),
+  requireWalletAccess('wallet'),
   validate(vaccinationListQuerySchema, 'query'),
   async (req, res) => {
     const { wallet } = req.params;
