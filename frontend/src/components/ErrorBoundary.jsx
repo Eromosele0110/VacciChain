@@ -1,5 +1,41 @@
 import { Component } from 'react';
 
+const SENSITIVE_KEY_PATTERN = /(token|access[_-]?token|refresh[_-]?token|id[_-]?token|auth|authorization|password|secret|api[_-]?key|patient|patient[_-]?id|mrn|ssn|dob|date[_-]?of[_-]?birth|vaccin|immuniz|record|lot[_-]?number|lot|dose|clinic|provider|name|email|phone|address)/i;
+
+const REDACTED = '[REDACTED]';
+
+function redactValue(value, depth = 0) {
+  if (depth > 4) return REDACTED;
+  if (value == null) return value;
+  if (typeof value === 'string') {
+    // Redact anything that looks like a bearer token or JWT.
+    if (/^bearer\s+/i.test(value)) return REDACTED;
+    if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) return REDACTED;
+    return value;
+  }
+  if (typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => redactValue(item, depth + 1));
+  const result = {};
+  for (const key of Object.keys(value)) {
+    if (SENSITIVE_KEY_PATTERN.test(key)) {
+      result[key] = REDACTED;
+    } else {
+      result[key] = redactValue(value[key], depth + 1);
+    }
+  }
+  return result;
+}
+
+function sanitizeError(error) {
+  if (!error) return null;
+  return {
+    name: error.name || 'Error',
+    message: typeof error.message === 'string' ? error.message : 'Unknown error',
+    // Only include stack in development; it can leak file paths and data.
+    ...(import.meta.env.DEV && error.stack ? { stack: error.stack } : {}),
+  };
+}
+
 /**
  * Redacts an error message for production so stack frames and internal paths
  * are never sent to the browser.  Only the first sentence of a safe, generic
@@ -26,8 +62,13 @@ function redact(message) {
  */
 function logError(error, info, isDev) {
   if (isDev) {
-    // Full detail in development so engineers can debug quickly.
-    console.error('[ErrorBoundary]', error, info?.componentStack);
+    // Full detail in development so engineers can debug quickly, with
+    // sensitive values scrubbed before they reach the console.
+    const safeError = sanitizeError(error);
+    const safeInfo = info && info.componentStack
+      ? { componentStack: info.componentStack }
+      : undefined;
+    console.error('[ErrorBoundary]', redactValue(safeError), safeInfo ? redactValue(safeInfo) : undefined);
     return;
   }
 
@@ -89,7 +130,7 @@ export default class ErrorBoundary extends Component {
           <h2 style={{ color: '#f87171', marginBottom: '0.75rem' }}>Something went wrong</h2>
           {/* Safe message only — never raw exception details */}
           <p style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>
-            {this.state.safeMessage}
+            {this.state.safeMessage || 'An unexpected error occurred. Please try again.'}
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
