@@ -1,115 +1,111 @@
 const jwt = require('jsonwebtoken');
-const { getVerificationKeys, ISSUER, AUDIENCE } = require('../jwtKeys');
-const { AppError } = require('./errors');
+const jwtKeys = require('../jwtKeys');
+const { ERROR_CODES, sendError } = require('../errors');
+
+const REQUIRED_CLAIMS = ['sub', 'role', 'wallet', 'exp'];
 
 /**
- * Shared JWT verification logic with key rotation and claim validation.
+ * Verify a bearer token against the active keys (#47).
  *
- * Supports key rotation: tries the current key first (matched by `kid` header),
- * then falls back to previous keys so tokens issued before a rotation remain
- * valid during the transition window. Keys older than the rotation cutoff are
- * rejected.
+ * The matching `kid` is tried first, then the other active keys so tokens
+ * issued before a rotation stay valid during the overlap window. Algorithm,
+ * issuer and audience are pinned via `verifyOptions()`, and identity comes
+ * only from verified claims: `sub` must equal `wallet`.
  *
- * Validates required claims (sub, role, wallet, exp) plus issuer (`iss`) and
- * audience (`aud`) so role/wallet identity is never inferred from untrusted
- * client values.
- *
- * @param {string} token - JWT string
- * @returns {Object} decoded payload
- * @throws {AppError} 401 when the token is missing/invalid/expired or claims fail
+ * @returns {{ user: object } | { status: number, code: string, message: string }}
  */
-function verifyAndDecode(token) {
-  const keys = getVerificationKeys();
-  let decoded = null;
-  let lastErr = null;
+function verifyBearer(req, allowedRoles) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return { status: 401, code: ERROR_CODES.UNAUTHENTICATED, message: 'Missing authorization header' };
+  }
+  const token = header.slice(7);
 
   let preferredKid = null;
   try {
-    const unverified = jwt.decode(token, { complete: true });
-    preferredKid = unverified?.header?.kid || null;
+    preferredKid = jwt.decode(token, { complete: true })?.header?.kid || null;
   } catch (_) {
-    // ignore — we'll try all keys
+    // malformed — verification below fails
   }
 
-  const ordered = preferredKid
-    ? [...keys].sort((a) => (a.kid === preferredKid ? -1 : 1))
-    : keys;
+  const keys = jwtKeys.getVerificationKeys();
+  const ordered = preferredKid ? [...keys].sort((a) => (a.kid === preferredKid ? -1 : 1)) : keys;
+  // Older test doubles of jwtKeys only stub the key getters.
+  const options = typeof jwtKeys.verifyOptions === 'function' ? jwtKeys.verifyOptions() : { algorithms: ['HS256'] };
 
+  let decoded = null;
   for (const key of ordered) {
     try {
-      decoded = jwt.verify(token, key.secret, {
-        issuer: ISSUER,
-        audience: AUDIENCE || undefined,
-      });
+      decoded = jwt.verify(token, key.secret, options);
       break;
     } catch (err) {
       lastErr = err;
     }
   }
-
   if (!decoded) {
-    throw new AppError('unauthorized', 'Invalid or expired token', 401);
+    return { status: 401, code: ERROR_CODES.TOKEN_INVALID, message: 'Invalid or expired token' };
   }
 
-  // Validate required claims
-  const requiredClaims = ['sub', 'role', 'wallet', 'exp'];
-  for (const claim of requiredClaims) {
+  for (const claim of REQUIRED_CLAIMS) {
     if (!decoded[claim]) {
-      throw new AppError('unauthorized', `Missing or empty claim: ${claim}`, 401);
+      return { status: 401, code: ERROR_CODES.TOKEN_INVALID, message: `Missing or empty claim: ${claim}` };
     }
   }
-
-  // Validate role value
-  if (!['patient', 'issuer'].includes(decoded.role)) {
-    throw new AppError('unauthorized', 'Invalid role claim', 401);
+  if (decoded.sub !== decoded.wallet) {
+    return { status: 401, code: ERROR_CODES.TOKEN_INVALID, message: 'Token subject does not match wallet claim' };
+  }
+  if (!allowedRoles.includes(decoded.role)) {
+    return { status: 401, code: ERROR_CODES.TOKEN_INVALID, message: 'Invalid role claim' };
   }
 
-  return decoded;
+  // `publicKey` is kept as an alias of the verified wallet for existing route code.
+  return { user: { ...decoded, publicKey: decoded.wallet } };
 }
 
-/**
- * JWT authentication middleware.
- */
-function authMiddleware(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return next(new AppError('unauthorized', 'Missing authorization header', 401));
-  }
-
-  const token = header.slice(7);
-
-  try {
-    req.user = verifyAndDecode(token);
+function middlewareFor(allowedRoles) {
+  return function authenticate(req, res, next) {
+    const result = verifyBearer(req, allowedRoles);
+    if (!result.user) return sendError(req, res, result.status, result.code, result.message);
+    req.user = result.user;
     next();
-  } catch (err) {
-    next(err);
-  }
+  };
 }
 
+/** JWT authentication for patient and issuer routes. */
+const authMiddleware = middlewareFor(['patient', 'issuer']);
+
+/** Variant that also accepts the 'admin' role. Use only on admin-only routes. */
+const adminAuthMiddleware = middlewareFor(['patient', 'issuer', 'admin']);
+
 /**
- * Auth middleware variant that also accepts the 'admin' role.
- * Use only on admin-only routes.
+ * Object-level authorization (#45): the wallet in `req.params[param]` must be
+ * the caller's own verified wallet, unless the caller's role is listed in
+ * `privilegedRoles`. Never trusts a wallet sent by the client.
  */
-function adminAuthMiddleware(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return next(new AppError('unauthorized', 'Missing authorization header', 401));
-  }
-
-  const token = header.slice(7);
-
-  try {
-    const decoded = verifyAndDecode(token);
-    if (!['patient', 'issuer', 'admin'].includes(decoded.role)) {
-      throw new AppError('unauthorized', 'Invalid role claim', 401);
+function requireWalletAccess(param = 'wallet', privilegedRoles = ['issuer', 'admin']) {
+  return async function walletAccess(req, res, next) {
+    if (!req.user) {
+      return sendError(req, res, 401, ERROR_CODES.UNAUTHENTICATED, 'Missing authorization header');
     }
-    req.user = decoded;
-    next();
-  } catch (err) {
-    next(err);
-  }
+    if (req.params[param] === req.user.wallet) return next();
+    if (!privilegedRoles.includes(req.user.role)) {
+      return sendError(req, res, 403, ERROR_CODES.FORBIDDEN, "You don't have access to this wallet's records");
+    }
+    if (req.user.role !== 'issuer') return next();
+
+    // An issuer token can outlive the issuer's on-chain authorization, so the
+    // allowlist is re-checked on every cross-wallet read.
+    try {
+      const { isAuthorizedIssuer } = require('../stellar/issuerCache');
+      if (await isAuthorizedIssuer(req.user.wallet)) return next();
+      return sendError(req, res, 403, ERROR_CODES.FORBIDDEN, 'Issuer authorization revoked or not found on-chain');
+    } catch (_) {
+      return sendError(req, res, 502, ERROR_CODES.RPC_ERROR, 'Failed to verify issuer authorization');
+    }
+  };
 }
 
 module.exports = authMiddleware;
 module.exports.adminAuthMiddleware = adminAuthMiddleware;
-module.exports.verifyAndDecode = verifyAndDecode;
+module.exports.requireWalletAccess = requireWalletAccess;
+module.exports.verifyBearer = verifyBearer;
