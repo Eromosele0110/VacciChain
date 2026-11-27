@@ -26,6 +26,7 @@ function deriveStatus(result) {
 }
 
 const styles = {
+  page: { margin: '2rem 0' },
   input: { padding: '0.6rem 0.75rem', background: 'var(--input-bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: '1rem', width: '100%' },
   btn: { padding: '0.6rem 1.5rem', background: 'var(--btn-primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: '1rem', marginTop: '0.75rem' },
 };
@@ -75,7 +76,7 @@ export default function VerifyPage() {
   };
 
   return (
-    <div style={{ ...pageContainerNarrow, marginTop: '2rem', marginBottom: '2rem' }}>
+    <div className="page-container page-section content-medium" style={{ ...pageContainerNarrow, ...styles.page }}>
       <h2 style={{ marginBottom: '1.5rem', color: 'var(--text)' }}>Verify Vaccination Status</h2>
       <form onSubmit={handleVerify}>
         <label htmlFor="wallet-input" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>
@@ -111,7 +112,7 @@ export default function VerifyPage() {
             <CopyButton text={wallet} label="wallet address" />
           </p>
           <div style={{ marginTop: '1rem' }}>
-            {result.records?.map((r) => <NFTCard key={r.token_id} record={r} />)}
+            {result.records?.map((r) => <NFTCard key={r.token_id} record={r} patientWallet={result.wallet} />)}
           </div>
         </div>
       )}

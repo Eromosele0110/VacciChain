@@ -5,6 +5,7 @@
 const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
+const { toIndexedMint } = require('../schemas/vaccinationRecord');
 
 let db = null;
 let dbPath = null;
@@ -433,6 +434,8 @@ function queryEvents({ event_type, limit = 100, offset = 0 } = {}) {
     const obj = {};
     columns.forEach((col, i) => { obj[col] = row[i]; });
     obj.payload = JSON.parse(obj.payload);
+    // Rows written before schema versioning are upgraded on read.
+    if (obj.event_type === 'VaccinationMinted') obj.payload = toIndexedMint(obj.payload);
     return obj;
   });
 }

@@ -31,7 +31,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/bundle-report.mjs",
     "preview": "vite preview",
     "lint": "eslint src",
     "test": "jest",

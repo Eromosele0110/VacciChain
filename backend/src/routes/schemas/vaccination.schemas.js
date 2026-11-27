@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const crypto = require('crypto');
+const { issueRequestV1 } = require('../../schemas/vaccinationRecord');
 
 /**
  * Validation schemas for vaccination routes.
@@ -185,13 +186,18 @@ const issueSchema = z.object({
   dose_number: z.number()
     .int('dose_number must be an integer')
     .min(1, 'dose_number must be at least 1')
+    .max(4294967295, 'dose_number must fit in an unsigned 32-bit integer')
     .optional()
     .describe('Dose number in series'),
   dose_series: z.number()
     .int('dose_series must be an integer')
     .min(1, 'dose_series must be at least 1')
+    .max(4294967295, 'dose_series must fit in an unsigned 32-bit integer')
     .optional()
     .describe('Total doses in series'),
+}).refine((r) => r.dose_number === undefined || r.dose_series === undefined || r.dose_number <= r.dose_series, {
+  message: 'dose_number must not exceed dose_series',
+  path: ['dose_number'],
 });
 
 const revokeSchema = z.object({
@@ -358,7 +364,7 @@ function hashPayload(payload) {
 }
 
 module.exports = {
-  issueSchema,
+  issueSchema: issueRequestV1,
   revokeSchema,
   dateOnlySchema,
   isoUtcTimestampSchema,

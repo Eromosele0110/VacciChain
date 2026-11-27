@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react';
-import QRCode from 'qrcode';
+import { useEffect, useRef, useState } from 'react';
 
 function getFocusableElements(root) {
   if (!root) return [];
@@ -8,15 +7,20 @@ function getFocusableElements(root) {
 }
 
 export default function QRCodeModal({ url, onClose }) {
+  const [failed, setFailed] = useState(false);
   const canvasRef = useRef(null);
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
   const previousActive = useRef(null);
 
   useEffect(() => {
-    if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, url, { width: 256, margin: 2 });
-    }
+    let active = true;
+    import('qrcode')
+      .then(({ default: QRCode }) => {
+        if (active && canvasRef.current) return QRCode.toCanvas(canvasRef.current, url, { width: 256, margin: 2 });
+      })
+      .catch(() => { if (active) setFailed(true); });
+    return () => { active = false; };
   }, [url]);
 
   useEffect(() => {
@@ -71,6 +75,7 @@ export default function QRCodeModal({ url, onClose }) {
         }}
       >
         <h3 style={{ color: '#e2e8f0', margin: 0 }}>Vaccination QR Code</h3>
+        {failed && <p role="alert">Could not load the QR code. Close this dialog and try again.</p>}
         <canvas ref={canvasRef} style={{ borderRadius: 8 }} />
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           <button
