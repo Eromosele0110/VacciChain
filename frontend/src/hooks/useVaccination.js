@@ -8,6 +8,31 @@ const PAGE_SIZE = 10;
 const recordsUrl = (wallet, page) => `/v1/vaccination/${wallet}?page=${page}&limit=${PAGE_SIZE}`;
 const CACHE_TTL = 30_000; // 30 seconds
 
+// Redaction utility for client-side diagnostics. Strips tokens, patient
+// identifiers and record details before anything is logged or surfaced.
+const SENSITIVE_KEY_PATTERN = /(token|secret|password|authorization|auth|jwt|key|wallet|address|patient|name|dob|birth|record|vaccin|issuer|hash)/i;
+const TOKEN_LIKE_PATTERN = /\b(?:bearer\s+)?[A-Za-z0-9_-]{20,}\b/gi;
+
+export function redactForDiagnostics(input) {
+  if (input == null) return input;
+  if (typeof input === 'string') {
+    return input.replace(TOKEN_LIKE_PATTERN, '[REDACTED]');
+  }
+  if (typeof input !== 'object') return input;
+  if (Array.isArray(input)) return input.map(redactForDiagnostics);
+  const out = {};
+  for (const [key, value] of Object.entries(input)) {
+    out[key] = SENSITIVE_KEY_PATTERN.test(key) ? '[REDACTED]' : redactForDiagnostics(value);
+  }
+  return out;
+}
+
+// Produce a safe, user-facing error message that never includes raw payloads.
+function safeErrorMessage(e, fallback) {
+  const raw = (e && typeof e.message === 'string' && e.message) || fallback;
+  return redactForDiagnostics(raw);
+}
+
 export function useVaccination(walletAddress) {
   const { apiFetch } = useAuth();
   const toast = useToast();
@@ -41,7 +66,7 @@ export function useVaccination(walletAddress) {
       return list;
     } catch (e) {
       if (e.name === 'AbortError') return;
-      const msg = e.message || 'Failed to fetch records.';
+      const msg = safeErrorMessage(e, 'Failed to fetch records.');
       setError(msg);
       toastRef.current(msg, 'error');
       return null;
@@ -97,10 +122,10 @@ export function useVaccination(walletAddress) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${data.transactionHash}`;
-      toastRef.current(`Vaccination NFT minted! Token ID: ${data.tokenId} — View on Explorer: ${explorerUrl}`, 'success');
+      toastRef.current(`Vaccination NFT minted! View on Explorer: ${explorerUrl}`, 'success');
       return data;
     } catch (e) {
-      toastRef.current(e.message || 'Failed to issue vaccination.', 'error');
+      toastRef.current(safeErrorMessage(e, 'Failed to issue vaccination.'), 'error');
       return null;
     } finally {
       setLoading(false);

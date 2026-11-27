@@ -78,9 +78,100 @@ All ratios computed using the WCAG relative luminance formula.
 
 ---
 
+## Forms — Labels, Errors, and Required Fields
+
+Issuer and onboarding forms communicate field purpose, constraints, and validation status accessibly.
+
+### Labels and error association
+
+- Every form control has a programmatic label: inputs are associated with a `<label htmlFor>` matching the control's `id`, or an `aria-label` where a visible label is not rendered.
+- Validation errors are associated with the invalid field via `aria-describedby` pointing at the error message element, and the field is marked `aria-invalid="true"` while invalid.
+- Error messages are rendered in a live region (`role="alert"` / `aria-live="assertive"`) so screen readers announce them when validation fails.
+- Field purpose and constraints (e.g., format hints) are exposed through `aria-describedby` alongside the error message.
+
+### Required and optional fields
+
+- Required fields are marked with `required` / `aria-required="true"` and a visible required indicator.
+- Optional fields are explicitly labeled as optional so the distinction is clear to all users.
+- The required/optional distinction is conveyed in text, not by color or asterisk alone.
+
+### Verification
+
+- Run an accessibility checker (e.g., axe DevTools, Lighthouse accessibility audit, or `jest-axe` in tests) against the issuer and onboarding forms and confirm zero label/error-association violations.
+- Manually verify with a screen reader that focusing an invalid field announces its label, constraint, and error message.
+- Confirm required and optional fields are announced correctly.
+
+---
+
+## Reduced Motion
+
+The app honors the user's `prefers-reduced-motion` setting. When reduced motion is requested, non-essential transitions and animations are disabled or reduced to near-instant.
+
+### Covered areas
+
+- **Navigation:** route/page transitions and nav hover/active animations are suppressed.
+- **Skeletons:** loading skeleton shimmer/pulse animations are replaced with a static placeholder.
+- **Notifications:** toast/notification enter/exit animations are reduced to instant appearance/disappearance.
+
+### Verification
+
+- Enable reduced motion at the OS level (macOS: System Settings → Accessibility → Display → Reduce motion; Windows: Settings → Accessibility → Visual effects → Animation effects off) or emulate it in DevTools (Rendering → Emulate CSS media feature `prefers-reduced-motion: reduce`).
+- Navigate between pages and confirm no non-essential transitions play.
+- Trigger loading states and confirm skeletons render statically without shimmer/pulse.
+- Trigger a notification and confirm it appears/disappears without animation.
+- Confirm all content remains fully usable and no information is conveyed by motion alone.
+
+---
+
+## Verification Status Cues (Color-Independent)
+
+Record validity and revocation are never communicated by color alone. Every status
+renders a textual label plus an icon, and exposes an accessible name that does not
+depend on color.
+
+| Status | Textual label | Icon | Accessible name | Colors |
+|--------|---------------|------|-----------------|--------|
+| Valid | `Valid` | ✓ (check) | "Status: Valid" | `#4ade80` on `#14532d` |
+| Revoked | `Revoked` | ✕ (cross) | "Status: Revoked" | `#f87171` on `#450a0a` |
+| Unknown / not found | `Not found` | ? (question) | "Status: Not found" | `#94a3b8` on `#1e293b` |
+
+- The label text is always visible; the icon is decorative (`aria-hidden="true"`)
+  and the accessible name is provided via `aria-label` on the status container.
+- Color is a redundant enhancement only — removing it does not change meaning.
+
+---
+
+## Visual Review Checklist
+
+Run this checklist for any change touching status, badge, or verification UI.
+
+### Contrast
+
+- [ ] Status label text meets 4.5:1 against its badge background.
+- [ ] Status icons meet 3:1 against their background (non-text contrast).
+- [ ] Focus indicators on status-related controls meet 3:1 against adjacent colors.
+- [ ] Ratios re-verified with the WCAG relative luminance formula (see table above).
+
+### Color-Vision Simulations
+
+- [ ] Protanopia simulation: Valid vs. Revoked remain distinguishable by label and icon.
+- [ ] Deuteranopia simulation: Valid vs. Revoked remain distinguishable by label and icon.
+- [ ] Tritanopia simulation: Valid vs. Revoked remain distinguishable by label and icon.
+- [ ] Achromatopsia (grayscale) simulation: all statuses remain distinguishable.
+- [ ] No status relies on hue alone; text and iconography carry the meaning.
+
+### Assistive Technology
+
+- [ ] Screen reader announces the status label and accessible name.
+- [ ] Status is not conveyed solely through `title` or hover-only affordances.
+
+---
+
 ## Notes
 
 - The application uses a single dark theme. There is no light mode; light-mode contrast is not applicable.
 - All interactive elements (buttons, links) meet the 3:1 minimum after fixes.
 - Large text elements (h1, h2) all passed without changes.
 - `VerificationBadge` colors (`#4ade80`/`#14532d` and `#f87171`/`#450a0a`) both pass without changes.
+- Verification statuses are color-independent: each has a textual label, icon, and
+  accessible name (see "Verification Status Cues" above).
