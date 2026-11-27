@@ -1,5 +1,6 @@
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
+const { adminAuthMiddleware, requireWalletAccess } = require('../middleware/auth');
 const { getConsent, recordConsent, hasConsented } = require('../indexer/db');
 const validate = require('../middleware/validate');
 const { recordConsentSchema } = require('./schemas/consent.schemas');
@@ -8,9 +9,11 @@ const router = express.Router();
 
 /**
  * GET /patient/consent/:wallet
- * Returns consent status for a wallet. Public — used by issuers before minting.
+ * Returns consent status for a wallet. Requires a JWT (#45): a patient may
+ * only read their own consent; issuers (re-verified on-chain, used before
+ * minting) and admins may read any wallet's.
  */
-router.get('/consent/:wallet', (req, res) => {
+router.get('/consent/:wallet', adminAuthMiddleware, requireWalletAccess('wallet'), (req, res) => {
   const { wallet } = req.params;
   const consent = getConsent(wallet);
   res.json({ wallet, consented: !!consent, consented_at: consent?.consented_at ?? null });
