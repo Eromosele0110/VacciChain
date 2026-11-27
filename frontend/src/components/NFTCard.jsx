@@ -33,7 +33,7 @@ async function exportCertificate(record, locale, t) {
   doc.save(`VacciChain_${safeName}_${formattedDate}.pdf`);
 }
 
-export default function NFTCard({ record, onClick, loading = false }) {
+export default function NFTCard({ record, patientWallet, onClick, loading = false }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
 
@@ -72,8 +72,12 @@ export default function NFTCard({ record, onClick, loading = false }) {
           💉 {record.vaccine_name}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {record.dose_number == null && record.dose_series != null && (
+            <span style={{ fontSize: '0.72rem', color: '#93c5fd' }}>{record.dose_series}-dose series</span>
+          )}
           {record.dose_number != null && (
             <span
+              role="img"
               aria-label={
                 record.dose_series != null
                   ? t('nftCard.doseOfSeries', {

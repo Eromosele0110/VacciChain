@@ -111,7 +111,7 @@ export default function VerifyPage() {
             <CopyButton text={wallet} label="wallet address" />
           </p>
           <div style={{ marginTop: '1rem' }}>
-            {result.records?.map((r) => <NFTCard key={r.token_id} record={r} />)}
+            {result.records?.map((r) => <NFTCard key={r.token_id} record={r} patientWallet={result.wallet} />)}
           </div>
         </div>
       )}
