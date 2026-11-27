@@ -38,7 +38,7 @@ jest.mock('../src/stellar/sep10', () => ({
 }));
 
 describe('Integration Tests - SEP-10 Auth Flow', () => {
-  describe('POST /auth/sep10', () => {
+  describe('POST /v1/auth/sep10', () => {
     it('should generate a challenge for a valid public key', async () => {
       const res = await request(app)
         .post('/v1/auth/sep10')
@@ -68,7 +68,7 @@ describe('Integration Tests - SEP-10 Auth Flow', () => {
     });
   });
 
-  describe('POST /auth/verify', () => {
+  describe('POST /v1/auth/verify', () => {
     it('should issue JWT for valid signed challenge', async () => {
       const res = await request(app)
         .post('/v1/auth/verify')
@@ -213,7 +213,7 @@ describe('Integration Tests - Protected Routes', () => {
     });
   });
 
-  describe('POST /vaccination/issue', () => {
+  describe('POST /v1/vaccination/issue', () => {
     it('should reject request without auth header', async () => {
       const res = await request(app)
         .post('/v1/vaccination/issue')

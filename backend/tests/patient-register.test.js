@@ -12,7 +12,7 @@ const { invokeContract } = require('../src/stellar/soroban');
 const { jwtFactory } = require('./factories');
 
 
-describe('POST /patient/register', () => {
+describe('POST /v1/patient/register', () => {
   beforeEach(() => {
     process.env.JWT_SECRET = 'test-secret';
     process.env.ADMIN_SECRET_KEY = 'SCZANGBA5RLMPI35IQKZNMHES4NXBS4RVZJBZPAXKZQNQNZ5RX42L72';

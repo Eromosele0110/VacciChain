@@ -21,6 +21,10 @@ const normalizeIssuer = (i) => ({ ...i, address: i.address ?? i.issuer, count: i
 const REFRESH_INTERVAL = 60_000;
 const STALE_THRESHOLD_MS = 5 * 60_000;
 
+// Analytics is reached through the backend proxy (#37) so the internal
+// analytics service is never called directly from the browser.
+const ANALYTICS_PREFIX = '/v1/analytics';
+
 const s = {
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.5rem' },
   h2: { color: '#e2e8f0', margin: 0 },

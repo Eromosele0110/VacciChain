@@ -29,7 +29,7 @@ function issuerToken() {
 
 // ── admin API key routes ──────────────────────────────────────────────────────
 
-describe('POST /admin/api-keys', () => {
+describe('POST /v1/admin/api-keys', () => {
   it('requires auth', async () => {
     const res = await request(app).post('/v1/admin/api-keys').send({ label: 'Test' });
     expect(res.status).toBe(401);
@@ -67,7 +67,7 @@ describe('POST /admin/api-keys', () => {
   });
 });
 
-describe('GET /admin/api-keys', () => {
+describe('GET /v1/admin/api-keys', () => {
   it('requires auth', async () => {
     const res = await request(app).get('/v1/admin/api-keys');
     expect(res.status).toBe(401);
@@ -85,7 +85,7 @@ describe('GET /admin/api-keys', () => {
   });
 });
 
-describe('DELETE /admin/api-keys/:id', () => {
+describe('DELETE /v1/admin/api-keys/:id', () => {
   it('revokes a key', async () => {
     const createRes = await request(app)
       .post('/v1/admin/api-keys')

@@ -68,7 +68,7 @@ beforeEach(() => {
 
 
 
-describe('Wallet validation — POST /vaccination/issue', () => {
+describe('Wallet validation — POST /v1/vaccination/issue', () => {
   it('rejects malformed patient_address', async () => {
     const res = await request(app)
       .post('/v1/vaccination/issue')
