@@ -1,4 +1,5 @@
 const express = require('express');
+const { ERROR_CODES, sendError } = require('../errors');
 const crypto = require('crypto');
 const StellarSdk = require('@stellar/stellar-sdk');
 const authMiddleware = require('../middleware/auth');
@@ -41,7 +42,7 @@ router.post('/issuers', adminAuthMiddleware, adminOnly, validate(addIssuerSchema
     res.status(201).json({ address, authorized: true, hash: result.hash });
   } catch (err) {
     audit({ actor: req.user.wallet, action: 'admin.add_issuer', result: 'failure', meta: { address, error: err.message } });
-    res.status(500).json({ error: err.message });
+    sendError(req, res, 500, ERROR_CODES.INTERNAL_ERROR, err.message);
   }
 });
 
@@ -67,7 +68,7 @@ router.delete('/issuers/:wallet', adminAuthMiddleware, adminOnly, async (req, re
     res.json({ wallet, authorized: false, hash: result.hash });
   } catch (err) {
     audit({ actor: req.user.wallet, action: 'admin.revoke_issuer', target: wallet, result: 'failure', meta: { error: err.message } });
-    res.status(500).json({ error: err.message });
+    sendError(req, res, 500, ERROR_CODES.INTERNAL_ERROR, err.message);
   }
 });
 
@@ -85,7 +86,7 @@ router.get('/issuers', adminAuthMiddleware, adminOnly, async (req, res) => {
     }
     res.json({ issuers });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(req, res, 500, ERROR_CODES.INTERNAL_ERROR, err.message);
   }
 });
 
@@ -163,7 +164,7 @@ router.post('/jwt/rotate', adminAuthMiddleware, adminOnly, validate(rotateJwtSch
     rotateKey({ newSecret: new_secret, newKid: new_kid });
     res.json({ rotated: true, method: 'inline', kid: new_kid || 'auto' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(req, res, 500, ERROR_CODES.INTERNAL_ERROR, err.message);
   }
 });
 

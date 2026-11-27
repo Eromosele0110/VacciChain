@@ -2,7 +2,22 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useFreighter';
 import { pageContainerWide } from '../layout.js';
 
-const ANALYTICS_BASE = import.meta.env.VITE_ANALYTICS_URL || 'http://localhost:8001';
+// Same-origin: the edge proxy forwards /analytics/* to the internal service.
+async function readJson(res) {
+  if (res.status === 401 || res.status === 403) throw new Error('You are not authorized to view analytics.');
+  if (!res.ok) throw new Error('Analytics service is unavailable. Please try again later.');
+  try {
+    return await res.json();
+  } catch {
+    throw new Error('Analytics service returned an invalid response.');
+  }
+}
+
+const normalizeRates = ({ rates = [] }) => (Array.isArray(rates)
+  ? rates
+  : Object.entries(rates).map(([vaccine_name, count]) => ({ vaccine_name, count })));
+
+const normalizeIssuer = (i) => ({ ...i, address: i.address ?? i.issuer, count: i.count ?? i.total_issued });
 const REFRESH_INTERVAL = 60_000;
 const STALE_THRESHOLD_MS = 5 * 60_000;
 
@@ -200,11 +215,26 @@ function IssuerTable({ data, status }) {
   }
   if (!data || data.length === 0) return <p style={s.noData}>No issuer activity recorded.</p>;
   return (
-    <CountTable
-      caption="Issuer activity"
-      headers={['Issuer', 'Share', 'Volume', 'Last Active']}
-      rows={data.map((d, i) => ({ key: d.address ?? i, label: shorten(d.address), title: d.address, count: d.count, extra: lastActive(d) }))}
-    />
+    <table style={s.table} aria-label="Issuer activity">
+      <thead>
+        <tr>
+          <th style={s.th}>Issuer</th>
+          <th style={s.th}>Volume</th>
+          <th style={s.th}>Last Active</th>
+        </tr>
+      </thead>
+      <tbody>
+        {data.map((issuer) => (
+          <tr key={issuer.address}>
+            <td style={s.td} title={issuer.address}>
+              {issuer.address.slice(0, 8)}…{issuer.address.slice(-6)}
+            </td>
+            <td style={s.td}>{issuer.count}</td>
+            <td style={s.td}>{issuer.last_active ? new Date(issuer.last_active).toLocaleString() : issuer.last_ledger ? `Ledger ${issuer.last_ledger}` : '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -260,33 +290,35 @@ function Section({ id, title, source, empty, children }) {
   );
 }
 
-const INITIAL = { data: null, failed: false, updatedAt: null };
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [ratesData, issuersData, anomaliesData] = await Promise.all(
+        ['rates', 'issuers', 'anomalies'].map(async (name) => readJson(await apiFetch(`/analytics/${name}`)))
+      );
 
-export default function AnalyticsDashboard() {
-  const { role } = useAuth();
-  const [sources, setSources] = useState({ rates: INITIAL, issuers: INITIAL, anomalies: INITIAL });
-
-  const fetchAll = useCallback(() => Promise.all(
-    Object.entries(SOURCES).map(async ([name, parse]) => {
-      let next;
-      try {
-        const res = await fetch(`${ANALYTICS_BASE}/analytics/${name}`);
-        if (res.ok === false) throw new Error(`HTTP ${res.status}`);
-        next = { data: parse(await res.json()), failed: false, updatedAt: new Date() };
-      } catch {
-        // Keep the last good data so it can be shown as delayed.
-        next = { failed: true };
-      }
-      setSources((prev) => ({ ...prev, [name]: { ...prev[name], ...next } }));
-    })
-  ), []);
+      setRates(normalizeRates(ratesData));
+      setIssuers((issuersData.issuers ?? []).map(normalizeIssuer));
+      setAnomalies((anomaliesData.flagged_issuers ?? anomaliesData.anomalies ?? []).map(normalizeIssuer));
+      setLastRefresh(new Date());
+    } catch (e) {
+      setError(e.message || 'Failed to load analytics data.');
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch]);
 
   useEffect(() => {
     if (role !== 'issuer') return undefined;
     fetchAll();
-    const timer = setInterval(fetchAll, REFRESH_INTERVAL);
-    return () => clearInterval(timer);
+    timerRef.current = setInterval(fetchAll, REFRESH_INTERVAL);
+    return () => clearInterval(timerRef.current);
   }, [fetchAll, role]);
+
+  const ratesStatus = loading && rates === null ? 'loading' : dataStatus(rates, lastRefresh);
+  const issuersStatus = loading && issuers === null ? 'loading' : dataStatus(issuers, lastRefresh);
+  const anomaliesStatus = loading && anomalies === null ? 'loading' : dataStatus(anomalies, lastRefresh);
 
   if (role !== 'issuer') {
     return (
