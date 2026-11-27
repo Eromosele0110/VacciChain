@@ -58,6 +58,7 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+@import './layout.css';
 body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -125,4 +126,81 @@ nav a[aria-current="page"] { color: var(--accent); font-weight: 600; }
 /* Prevent horizontal scrolling at the body level */
 html, body {
   overflow-x: hidden;
+}
+
+/* Utility class to disable animations/transitions for components using inline styles */
+.reduce-motion,
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    animation-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Disable non-essential keyframe animations (skeletons, toasts, nav, etc.) */
+  .skeleton,
+  .skeleton *,
+  [class*="skeleton"],
+  [class*="toast"],
+  [class*="notification"],
+  nav,
+  nav * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Ensure skeleton pulse is fully disabled */
+  .skeleton-pulse,
+  .pulse {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  /* Disable smooth scrolling and parallax-like effects */
+  html {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── NavBar responsive styles ───────────────────────────────────────────── */
+
+/*
+ * On wide screens the hamburger button is hidden and the link list is always
+ * visible inline.  On narrow screens the button is shown and the link list
+ * is toggled via the .nav-links--open modifier class.
+ */
+@media (max-width: 639px) {
+  .nav-hamburger {
+    display: block !important;
+  }
+
+  /* Hidden state: removed from layout AND from the accessibility tree.
+     aria-hidden="true" on the wrapper handles AT; display:none handles layout. */
+  .nav-links:not(.nav-links--open) {
+    display: none !important;
+  }
+
+  /* Open state: stack links vertically */
+  .nav-links.nav-links--open {
+    display: flex !important;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 0.5rem 0;
+    gap: 0.75rem;
+  }
 }

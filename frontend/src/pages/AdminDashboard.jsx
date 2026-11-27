@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useFreighter';
+import { pageContainerNarrow } from '../layout.js';
 
 const s = {
   page:    { margin: '2rem 0' },
@@ -51,7 +52,7 @@ export default function AdminDashboard() {
 
   if (!publicKey) {
     return (
-      <div className="page-container page-section content-medium" style={s.page}>
+      <div className="page-container page-section content-medium" style={{ ...s.page, ...pageContainerNarrow }}>
         <p style={{ color: '#94a3b8', marginBottom: '1rem' }}>Connect your admin wallet to manage API keys.</p>
         <button style={s.btn} onClick={connect}>Connect Wallet</button>
       </div>
@@ -59,7 +60,7 @@ export default function AdminDashboard() {
   }
 
   if (role !== 'issuer') {
-    return <div className="page-container page-section content-medium" style={s.page}><p style={{ color: '#f87171' }}>Access denied: admin role required.</p></div>;
+    return <div className="page-container page-section content-medium" style={{ ...s.page, ...pageContainerNarrow }}><p style={{ color: '#f87171' }}>Access denied: admin role required.</p></div>;
   }
 
   const handleCreate = async (e) => {
@@ -110,7 +111,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="page-container page-section content-medium" style={s.page}>
+    <div className="page-container page-section content-medium" style={{ ...s.page, ...pageContainerNarrow }}>
       <h2 style={{ marginBottom: '1.5rem', color: 'var(--text)' }}>API Key Management</h2>
 
       <form style={s.row} onSubmit={handleCreate}>

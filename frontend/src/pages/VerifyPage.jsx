@@ -4,6 +4,26 @@ import VerificationBadge from '../components/VerificationBadge';
 import NFTCard from '../components/NFTCard';
 import CopyButton from '../components/CopyButton';
 import { useToast } from '../hooks/useToast';
+import { pageContainerNarrow } from '../layout.js';
+
+// Redact anything that looks like a token/secret and strip record details from
+// messages before they reach the console, toasts, or error UI.
+const SENSITIVE_PATTERN = /(bearer\s+)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|token[=:]\s*\S+|api[_-]?key[=:]\s*\S+/gi;
+
+function sanitizeMessage(message) {
+  const fallback = 'Verification failed. Please try again.';
+  if (typeof message !== 'string' || !message.trim()) return fallback;
+  const redacted = message.replace(SENSITIVE_PATTERN, '[redacted]');
+  // Only surface short, generic messages; drop anything that may embed record data.
+  return redacted.length > 200 ? fallback : redacted;
+}
+
+function deriveStatus(result) {
+  if (!result) return 'not-found';
+  if (result.revoked) return 'revoked';
+  if (result.vaccinated) return 'verified';
+  return 'not-found';
+}
 
 const styles = {
   page: { margin: '2rem 0' },
@@ -29,8 +49,9 @@ export default function VerifyPage() {
       if (!res.ok) throw new Error(data.error);
       setResult(data);
     } catch (e) {
-      setError(e.message || 'Verification failed.');
-      toast(e.message || 'Verification failed.', 'error');
+      const message = sanitizeMessage(e.message);
+      setError(message);
+      toast(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -55,7 +76,7 @@ export default function VerifyPage() {
   };
 
   return (
-    <div className="page-container page-section content-medium" style={styles.page}>
+    <div className="page-container page-section content-medium" style={{ ...pageContainerNarrow, ...styles.page }}>
       <h2 style={{ marginBottom: '1.5rem', color: 'var(--text)' }}>Verify Vaccination Status</h2>
       <form onSubmit={handleVerify}>
         <label htmlFor="wallet-input" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>
@@ -81,7 +102,11 @@ export default function VerifyPage() {
 
       {result && (
         <div style={{ marginTop: '1.5rem' }} aria-live="polite">
-          <VerificationBadge vaccinated={result.vaccinated} recordCount={result.record_count} />
+          <VerificationBadge
+            status={deriveStatus(result)}
+            vaccinated={result.vaccinated}
+            recordCount={result.record_count}
+          />
           <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '1rem', wordBreak: 'break-all', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.25rem' }}>
             Wallet: {wallet}
             <CopyButton text={wallet} label="wallet address" />

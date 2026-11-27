@@ -5,9 +5,9 @@ import { useVaccination } from '../hooks/useVaccination';
 import ConfirmMintDialog from '../components/ConfirmMintDialog';
 import CopyButton from '../components/CopyButton';
 import RoleBadge from '../components/RoleBadge';
+import { pageContainerNarrow } from '../layout.js';
 
 const styles = {
-  page: { margin: '2rem 0' },
   form: { display: 'flex', flexDirection: 'column', gap: '1rem' },
   input: { padding: '0.6rem 0.75rem', background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0', fontSize: '1rem', width: '100%', boxSizing: 'border-box' },
   inputError: { padding: '0.6rem 0.75rem', background: '#1e293b', border: '1px solid #f87171', borderRadius: 8, color: '#e2e8f0', fontSize: '1rem', width: '100%', boxSizing: 'border-box' },
@@ -44,6 +44,8 @@ export default function IssuerDashboard() {
   const [success, setSuccess] = useState(null);
   const [mintResult, setMintResult] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  const [pendingMint, setPendingMint] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(null);
 
   const validate = (f) => {
@@ -74,7 +76,7 @@ export default function IssuerDashboard() {
 
   if (!publicKey) {
     return (
-      <div className="page-container page-section content-narrow" style={styles.page}>
+      <div style={{ ...pageContainerNarrow, marginTop: '2rem', marginBottom: '2rem' }}>
         <p style={{ color: '#94a3b8', marginBottom: '1rem' }}>Connect your issuer wallet.</p>
         <button style={styles.btn} onClick={connect} aria-label="Connect issuer wallet">Connect Wallet</button>
       </div>
@@ -82,25 +84,57 @@ export default function IssuerDashboard() {
   }
 
   if (role !== 'issuer') {
-    return <div className="page-container page-section content-narrow" style={styles.page}><p style={{ color: '#f87171' }}>{t('issuer.accessDenied')}</p></div>;
+    return <div style={{ ...pageContainerNarrow, marginTop: '2rem', marginBottom: '2rem' }}><p style={{ color: '#f87171' }}>{t('issuer.accessDenied')}</p></div>;
   }
 
   if (isAuthorized === null) {
     return (
-      <div className="page-container page-section content-narrow" style={styles.page}>
+      <div style={{ ...pageContainerNarrow, marginTop: '2rem', marginBottom: '2rem' }}>
         <p style={{ color: '#94a3b8' }}>Checking authorization status...</p>
       </div>
     );
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const result = await issueVaccination(form);
-    if (result) {
-      setMintResult(result);
-      setForm(EMPTY_FORM);
-      sessionStorage.removeItem(FORM_KEY);
+    if (isSubmitting || loading || !isAuthorized) return;
+    if (!isValid) {
+      setTouched({ patient_address: true, vaccine_name: true, date_administered: true });
+      return;
     }
+    setPendingMint({
+      patient_address: form.patient_address.trim(),
+      vaccine_name: form.vaccine_name.trim(),
+      date_administered: form.date_administered,
+    });
+    setConfirming(true);
+  };
+
+  const handleConfirmMint = async () => {
+    if (isSubmitting || !pendingMint) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const result = await issueVaccination(pendingMint);
+      if (result) {
+        setMintResult(result);
+        setForm(EMPTY_FORM);
+        sessionStorage.removeItem(FORM_KEY);
+      } else {
+        setError(t('issuer.mintFailed', 'Mint failed. Please try again.'));
+      }
+    } catch (err) {
+      setError(err?.message || t('issuer.mintFailed', 'Mint failed. Please try again.'));
+    } finally {
+      setIsSubmitting(false);
+      setConfirming(false);
+      setPendingMint(null);
+    }
+  };
+
+  const handleCancelMint = () => {
+    setConfirming(false);
+    setPendingMint(null);
   };
 
   const fields = [
@@ -110,7 +144,7 @@ export default function IssuerDashboard() {
   ];
 
   return (
-    <div className="page-container page-section content-narrow" style={styles.page}>
+    <div style={{ ...pageContainerNarrow, marginTop: '2rem', marginBottom: '2rem' }}>
       <div style={{ borderLeft: '4px solid #22c55e', paddingLeft: '0.75rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
           <h2 style={{ color: '#e2e8f0', margin: 0 }}>Issue Vaccination NFT</h2>
@@ -124,23 +158,51 @@ export default function IssuerDashboard() {
           { key: 'date_administered', label: 'Date Administered', placeholder: 'YYYY-MM-DD' },
         ].map(({ key, label, placeholder }) => (
           <div key={key}>
-            <label htmlFor={key} style={styles.label}>{label}</label>
+            <label htmlFor={key} style={styles.label}>
+              {label} <span aria-hidden="true" style={{ color: '#f87171' }}>*</span>
+              <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>(required)</span>
+            </label>
             <input
               id={key}
               style={errors[key] ? styles.inputError : styles.input}
               placeholder={placeholder}
               value={form[key]}
               onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+              onBlur={() => setTouched((prev) => ({ ...prev, [key]: true }))}
               required
+              aria-required="true"
+              aria-invalid={Boolean(errors[key])}
+              aria-describedby={errors[key] ? `${key}-error` : undefined}
             />
-            {errors[key] && <p style={styles.fieldError}>{errors[key]}</p>}
+            {errors[key] && (
+              <p id={`${key}-error`} style={styles.fieldError} role="alert">
+                {errors[key]}
+              </p>
+            )}
           </div>
         ))}
-        <button style={isAuthorized ? styles.btn : styles.btnDisabled} type="submit" disabled={loading || !isAuthorized} aria-disabled={loading || !isAuthorized}>
-          {loading ? 'Minting…' : 'Issue Vaccination NFT'}
+        <button
+          style={isAuthorized && !isSubmitting ? styles.btn : styles.btnDisabled}
+          type="submit"
+          disabled={loading || isSubmitting || !isAuthorized}
+          aria-disabled={loading || isSubmitting || !isAuthorized}
+        >
+          {loading || isSubmitting ? 'Minting…' : 'Issue Vaccination NFT'}
         </button>
       </form>
+      <ConfirmMintDialog
+        open={confirming}
+        values={pendingMint}
+        submitting={isSubmitting}
+        onConfirm={handleConfirmMint}
+        onCancel={handleCancelMint}
+      />
       <div aria-live="polite" aria-atomic="true">
+        {error && (
+          <div role="alert" style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#7f1d1d', borderRadius: 8, color: '#f87171' }}>
+            {error}
+          </div>
+        )}
         {mintResult && (
           <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#0f172a', borderRadius: 8, color: '#4ade80' }}>
             <p>✅ Vaccination NFT minted!</p>
