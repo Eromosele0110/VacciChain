@@ -1,98 +1,61 @@
-const { describe, expect, it } = require('@jest/globals');
-const {
-  SCHEMA_VERSIONS,
-  CURRENT_VERSION,
-  validateVaccinationRecord,
-  normalizeVaccinationRecord,
-} = require('../src/schemas/vaccination.record.schema');
+const StellarSdk = require('@stellar/stellar-sdk');
+const { issueRequestV1, toRecord, toApiRecords, toIndexedMint } = require('../src/schemas/vaccinationRecord');
 
-const now = new Date().toISOString();
-
-const baseRecord = {
-  token_id: '1',
-  patient_address: 'GAAAAA...PATIENT',
-  vaccine_name: 'MMR',
-  date_administered: now,
-  issuer: 'GAAAAA...ISSUER',
-  timestamp: now,
+const req = { patient_address: 'GP', vaccine_name: 'Flu', date_administered: '2024-01-15' };
+const onChain = {
+  token_id: 18446744073709551615n, patient: 'GP', vaccine_name: 'Flu', date_administered: '2024-01-15',
+  issuer: 'GI', timestamp: 1700000000n, schema_version: 1, revoked: false, dose_number: 1, dose_series: 2,
 };
 
-describe('vaccination record schema (#41)', () => {
-  it('defines supported schema versions', () => {
-    expect(SCHEMA_VERSIONS).toEqual(['1', '2']);
-    expect(CURRENT_VERSION).toBe('2');
+describe('issue request', () => {
+  it('accepts required-only and full requests', () => {
+    expect(issueRequestV1.safeParse(req).success).toBe(true);
+    expect(issueRequestV1.safeParse({ ...req, schema_version: 1, dose_number: 1, dose_series: 2 }).success).toBe(true);
   });
-
-  it('accepts a valid current-version record', () => {
-    const result = validateVaccinationRecord({ ...baseRecord, version: '2' });
-    expect(result.valid).toBe(true);
-    expect(result.data.version).toBe('2');
+  it.each([
+    ['unknown field', { token_id: 1 }],
+    ['unsupported version', { schema_version: 2 }],
+    ['vaccine name over the contract limit', { vaccine_name: 'a'.repeat(101) }],
+    ['multi-byte name over the limit', { vaccine_name: 'é'.repeat(51) }],
+    ['invalid date', { date_administered: 'nope' }],
+    ['fractional dose', { dose_number: 1.5 }],
+    ['dose past series', { dose_number: 3, dose_series: 2 }],
+    ['null vaccine', { vaccine_name: null }],
+  ])('rejects %s', (_n, patch) => {
+    expect(issueRequestV1.safeParse({ ...req, ...patch }).success).toBe(false);
   });
+});
 
-  it('accepts a record without an explicit version', () => {
-    const result = validateVaccinationRecord(baseRecord);
-    expect(result.valid).toBe(true);
-    expect(result.data.version).toBe('2');
+describe('record mapping', () => {
+  it('maps contract records without losing u64 precision', () => {
+    expect(toRecord(onChain)).toEqual({ ...onChain, token_id: '18446744073709551615', timestamp: 1700000000 });
   });
-
-  it('rejects unknown fields', () => {
-    const result = validateVaccinationRecord({
-      ...baseRecord,
-      version: '2',
-      internal_note: 'should be rejected',
+  it('upgrades a legacy record', () => {
+    expect(toRecord({
+      token_id: 'token-001', patient_address: 'GP', issuer_address: 'GI',
+      vaccine_name: 'Flu', date_administered: '2020-01-01', lot_number: 'L', tx_hash: 'h',
+    })).toEqual({
+      token_id: 'token-001', patient: 'GP', issuer: 'GI', vaccine_name: 'Flu', date_administered: '2020-01-01',
+      lot_number: 'L', tx_hash: 'h', schema_version: 1, timestamp: null, revoked: false, dose_number: null, dose_series: null,
     });
-    expect(result.valid).toBe(false);
-    expect(result.error).toMatch(/Unknown field/);
   });
-
-  it('rejects non-object input', () => {
-    expect(validateVaccinationRecord(null).valid).toBe(false);
-    expect(validateVaccinationRecord('string').valid).toBe(false);
-    expect(validateVaccinationRecord([1, 2]).valid).toBe(false);
-    expect(validateVaccinationRecord(undefined).valid).toBe(false);
+  it.each([['missing issuer', { issuer: undefined }], ['unknown field', { x: 1 }], ['future version', { schema_version: 9 }]])(
+    'rejects %s', (_n, patch) => expect(() => toRecord({ ...onChain, ...patch })).toThrow());
+  it('still returns non-conforming on-chain records, JSON safe', () => {
+    expect(toApiRecords([{ token_id: 5n, x: 1 }])).toEqual([{ token_id: '5', x: 1 }]);
   });
+});
 
-  it('rejects missing required fields', () => {
-    const { patient_address, ...rest } = baseRecord;
-    const result = validateVaccinationRecord(rest);
-    expect(result.valid).toBe(false);
-    expect(Array.isArray(result.error) || typeof result.error === 'string').toBe(true);
-  });
-
-  it('rejects invalid vaccine_name length', () => {
-    const result = validateVaccinationRecord({
-      ...baseRecord,
-      vaccine_name: 'x'.repeat(300),
-    });
-    expect(result.valid).toBe(false);
-  });
-
-  it('maps a legacy v1 record forward to the current version', () => {
-    const legacy = { ...baseRecord, version: '1' };
-    const result = validateVaccinationRecord(legacy);
-    expect(result.valid).toBe(true);
-    expect(result.data.version).toBe('2');
-    expect(result.data.dose_number).toBeNull();
-    expect(result.data.dose_series).toBeNull();
-  });
-
-  it('preserves optional v2 fields when present', () => {
-    const result = validateVaccinationRecord({
-      ...baseRecord,
-      version: '2',
-      dose_number: 2,
-      dose_series: 3,
-    });
-    expect(result.valid).toBe(true);
-    expect(result.data.dose_number).toBe(2);
-    expect(result.data.dose_series).toBe(3);
-  });
-
-  it('normalizeVaccinationRecord upgrades v1 without validating', () => {
-    const legacy = { ...baseRecord, version: '1' };
-    const normalized = normalizeVaccinationRecord(legacy);
-    expect(normalized.version).toBe('2');
-    expect(normalized.dose_number).toBeNull();
-    expect(normalized.dose_series).toBeNull();
+describe('indexed mint mapping', () => {
+  const expected = { schema_version: 1, patient: 'GP', vaccine_name: 'Flu', issuer: 'GI', timestamp: 7 };
+  it.each([
+    ['tuple', ['GP', 'Flu', 'GI', 7n]],
+    ['positional object', { 0: 'GP', 1: 'Flu', 2: 'GI', 3: 7 }],
+    ['aliased object', { patient_address: 'GP', vaccine_name: 'Flu', issuer_address: 'GI', timestamp: 7 }],
+    ['current form', expected],
+  ])('maps %s', (_n, v) => expect(toIndexedMint(v)).toEqual(expected));
+  it('decodes an ScVal', () => {
+    const v = StellarSdk.xdr.ScVal.scvVec(['GP', 'Flu', 'GI', 7n].map((x) => StellarSdk.nativeToScVal(x)));
+    expect(toIndexedMint(v)).toEqual(expected);
   });
 });
