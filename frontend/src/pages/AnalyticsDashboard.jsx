@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useFreighter';
+import { pageContainerWide } from '../layout.js';
 
 const ANALYTICS_BASE = import.meta.env.VITE_ANALYTICS_URL || 'http://localhost:8001';
 const REFRESH_INTERVAL = 60_000;
+const STALE_THRESHOLD_MS = 5 * 60_000;
 
 const s = {
-  page: { maxWidth: 900, width: '100%', margin: '2rem auto', padding: '0 1rem', boxSizing: 'border-box' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.5rem' },
   h2: { color: '#e2e8f0', margin: 0 },
   refreshInfo: { color: '#64748b', fontSize: '0.8rem' },
@@ -28,6 +29,11 @@ const s = {
   barTrack: { minWidth: 80, background: '#1e293b', borderRadius: 4, height: 18, overflow: 'hidden' },
   barFill: (pct) => ({ width: `${pct}%`, height: '100%', background: '#0ea5e9', borderRadius: 4, transition: 'width 0.4s ease' }),
   noData: { color: '#475569', textAlign: 'center', padding: '1.5rem 0' },
+  statusMissing: { color: '#f87171', fontSize: '0.85rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' },
+  statusDelayed: { color: '#f59e0b', fontSize: '0.85rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' },
+  statusEmpty: { color: '#94a3b8', fontSize: '0.85rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' },
+  statusZero: { color: '#93c5fd', fontSize: '0.85rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' },
+  summaryWrap: { marginTop: '0.75rem', fontSize: '0.85rem', color: '#94a3b8' },
 };
 
 // The service returns { rates: { name: count } }; arrays are accepted too.
@@ -65,6 +71,29 @@ function lastActive(issuer) {
   if (issuer.last_active) return new Date(issuer.last_active).toLocaleString();
   if (issuer.last_ledger) return `Ledger ${issuer.last_ledger}`;
   return 'Not reported';
+}
+
+function dataStatus(data, lastRefresh) {
+  if (data === null) return 'missing';
+  if (lastRefresh && Date.now() - lastRefresh.getTime() > STALE_THRESHOLD_MS) return 'delayed';
+  if (data.length === 0) return 'empty';
+  if (data.every((d) => (d.count ?? 0) === 0)) return 'zero';
+  return 'loaded';
+}
+
+function StatusBanner({ kind, label }) {
+  const styles = {
+    missing: s.statusMissing,
+    delayed: s.statusDelayed,
+    empty: s.statusEmpty,
+    zero: s.statusZero,
+  };
+  const icons = { missing: '⚠️', delayed: '⏳', empty: '📭', zero: '0️⃣' };
+  return (
+    <p style={styles[kind]} role="status" aria-label={label}>
+      {icons[kind]} {label}
+    </p>
+  );
 }
 
 // The table is the textual equivalent of the bars, so both stay in sync.
@@ -106,17 +135,70 @@ function CountTable({ caption, headers, rows }) {
   );
 }
 
-function RatesChart({ data }) {
+function BarChart({ data, status }) {
+  if (status === 'missing') {
+    return <p style={s.noData}>Rates data is missing. Unable to load vaccination rates.</p>;
+  }
+  if (status === 'delayed') {
+    return <p style={s.noData}>Rates data is delayed. Data may not reflect recent activity.</p>;
+  }
+  if (!data || data.length === 0) return <p style={s.noData}>No vaccination rates recorded.</p>;
+  const max = Math.max(...data.map((d) => d.count), 1);
   return (
-    <CountTable
-      caption="Vaccination doses by vaccine type"
-      headers={['Vaccine', 'Share', 'Doses']}
-      rows={data.map((d) => ({ key: d.vaccine_name, label: d.vaccine_name, count: d.count }))}
-    />
+    <div style={{ overflowX: 'auto' }}>
+      <table style={s.table} aria-label="Vaccination doses by vaccine type">
+        <thead>
+          <tr>
+            {['Vaccine', 'Share', 'Doses'].map((h) => <th key={h} scope="col" style={s.th}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((d) => (
+            <tr key={d.vaccine_name}>
+              <th scope="row" style={{ ...s.td, textAlign: 'left', fontWeight: 400 }}>{d.vaccine_name}</th>
+              <td style={s.td}>
+                <div style={s.barTrack} role="img" aria-label={`${d.vaccine_name}: ${d.count} doses`}>
+                  <div style={s.barFill(Math.round(((d.count ?? 0) / max) * 100))} />
+                </div>
+              </td>
+              <td style={s.td}>{formatCount(d.count)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-function IssuerChart({ data }) {
+function RatesSummary({ data, status }) {
+  if (status === 'missing' || status === 'delayed') return null;
+  if (!data || data.length === 0) return <p style={s.summaryWrap}>No rates to summarize.</p>;
+  const total = data.reduce((acc, d) => acc + (d.count ?? 0), 0);
+  const top = [...data].sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0];
+  return (
+    <div style={s.summaryWrap}>
+      Total doses: {total} · {top ? `Top: ${top.vaccine_name} (${top.count})` : ''}
+    </div>
+  );
+}
+
+function RatesChart({ data, status }) {
+  return (
+    <>
+      <BarChart data={data} status={status} />
+      <RatesSummary data={data} status={status} />
+    </>
+  );
+}
+
+function IssuerTable({ data, status }) {
+  if (status === 'missing') {
+    return <p style={s.noData}>Issuer activity data is missing. Unable to load.</p>;
+  }
+  if (status === 'delayed') {
+    return <p style={s.noData}>Issuer activity data is delayed. Data may not reflect recent activity.</p>;
+  }
+  if (!data || data.length === 0) return <p style={s.noData}>No issuer activity recorded.</p>;
   return (
     <CountTable
       caption="Issuer activity"
@@ -126,7 +208,18 @@ function IssuerChart({ data }) {
   );
 }
 
-function AnomalyList({ data }) {
+function IssuerChart({ data, status }) {
+  return <IssuerTable data={data} status={status} />;
+}
+
+function AnomalyList({ data, status }) {
+  if (status === 'missing') {
+    return <p style={s.noData}>Anomaly data is missing. Unable to load.</p>;
+  }
+  if (status === 'delayed') {
+    return <p style={s.noData}>Anomaly data is delayed. Data may not reflect recent activity.</p>;
+  }
+  if (!data || data.length === 0) return <p style={{ ...s.noData, color: '#4ade80' }}>✅ No anomalies detected.</p>;
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={s.table} aria-label="Anomaly flags">
@@ -197,7 +290,7 @@ export default function AnalyticsDashboard() {
 
   if (role !== 'issuer') {
     return (
-      <div style={s.page}>
+      <div style={{ ...pageContainerWide, marginTop: '2rem', marginBottom: '2rem' }}>
         <p style={{ color: '#f87171' }}>Access restricted to authorized issuers.</p>
       </div>
     );
@@ -209,8 +302,12 @@ export default function AnalyticsDashboard() {
   // The oldest section decides how fresh the page as a whole is.
   const oldest = times.length ? new Date(Math.min(...times)) : null;
 
+  const ratesStatus = dataStatus(sources.rates.data, sources.rates.updatedAt);
+  const issuersStatus = dataStatus(sources.issuers.data, sources.issuers.updatedAt);
+  const anomaliesStatus = dataStatus(sources.anomalies.data, sources.anomalies.updatedAt);
+
   return (
-    <div style={s.page}>
+    <div style={{ ...pageContainerWide, marginTop: '2rem', marginBottom: '2rem' }}>
       <div style={s.header}>
         <h2 style={s.h2}>📊 Analytics Dashboard</h2>
         <span style={s.refreshInfo} aria-live="polite">
@@ -222,13 +319,43 @@ export default function AnalyticsDashboard() {
       {anyFailed && <p style={s.error} role="alert">⚠️ Some analytics data could not be loaded.</p>}
 
       <Section id="rates-title" title="Vaccination Rates by Vaccine Type" source={sources.rates} empty="No vaccinations recorded in this range.">
-        {(data) => <RatesChart data={data} />}
+        {(data) => (
+          <>
+            {ratesStatus !== 'loaded' && (
+              <StatusBanner
+                kind={ratesStatus}
+                label={ratesStatus === 'missing' ? 'Rates data is missing.' : ratesStatus === 'delayed' ? 'Rates data is delayed.' : ratesStatus === 'empty' ? 'No vaccination rates recorded.' : 'All vaccination rates are zero.'}
+              />
+            )}
+            <RatesChart data={data} status={ratesStatus} />
+          </>
+        )}
       </Section>
       <Section id="issuers-title" title="Issuer Activity" source={sources.issuers} empty="No issuers have minted in this range.">
-        {(data) => <IssuerChart data={data} />}
+        {(data) => (
+          <>
+            {(issuersStatus === 'missing' || issuersStatus === 'delayed' || issuersStatus === 'empty') && (
+              <StatusBanner
+                kind={issuersStatus}
+                label={issuersStatus === 'missing' ? 'Issuer activity data is missing.' : issuersStatus === 'delayed' ? 'Issuer activity data is delayed.' : 'No issuer activity recorded.'}
+              />
+            )}
+            <IssuerChart data={data} status={issuersStatus} />
+          </>
+        )}
       </Section>
       <Section id="anomalies-title" title="Anomaly Flags" source={sources.anomalies} empty="✅ No anomalies detected.">
-        {(data) => <AnomalyList data={data} />}
+        {(data) => (
+          <>
+            {(anomaliesStatus === 'missing' || anomaliesStatus === 'delayed') && (
+              <StatusBanner
+                kind={anomaliesStatus}
+                label={anomaliesStatus === 'missing' ? 'Anomaly data is missing.' : 'Anomaly data is delayed.'}
+              />
+            )}
+            <AnomalyList data={data} status={anomaliesStatus} />
+          </>
+        )}
       </Section>
     </div>
   );

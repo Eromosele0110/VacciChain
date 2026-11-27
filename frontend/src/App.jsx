@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Landing from './pages/Landing';
 import { AuthProvider } from './hooks/useFreighter';
@@ -8,6 +8,7 @@ import DemoBanner from './components/DemoBanner';
 import NavBar from './components/NavBar';
 import SkipToContent from './components/SkipToContent';
 import ChunkErrorBoundary from './components/ChunkErrorBoundary';
+import NotFoundPage from './pages/NotFoundPage';
 
 const PatientDashboard = lazy(() => import('./pages/PatientDashboard'));
 const IssuerDashboard = lazy(() => import('./pages/IssuerDashboard'));
@@ -19,6 +20,15 @@ const AnalyticsDashboard = lazy(() => import('./pages/AnalyticsDashboard'));
 export default function App() {
   const [dark, setDark] = useDarkMode();
   const { pathname } = useLocation();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dark) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [dark]);
 
   return (
     <AuthProvider>
@@ -37,6 +47,7 @@ export default function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/apply" element={<IssuerOnboarding />} />
           <Route path="/analytics" element={<AnalyticsDashboard />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </Suspense>
         </ChunkErrorBoundary>

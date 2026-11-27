@@ -11,6 +11,10 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/v1': 'http://backend:4000',
+      '/auth': 'http://backend:4000',
+      '/vaccination': 'http://backend:4000',
+      '/verify': 'http://backend:4000',
+      '/analytics': 'http://python-service:8001',
     },
   },
 
