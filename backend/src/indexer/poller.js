@@ -5,7 +5,7 @@
  * Indexed event types: VaccinationMinted, IssuerAdded, IssuerRevoked
  */
 const StellarSdk = require('@stellar/stellar-sdk');
-const { upsertEvents, getLatestLedger } = require('./db');
+const { upsertEvents, getLatestLedger, checkDatabaseIntegrity } = require('./db');
 const { invalidateCache } = require('../stellar/issuerCache');
 const { setGauge } = require('../metrics');
 const config = require('../config');
@@ -153,6 +153,18 @@ async function runPoll() {
     if (process.env.NODE_ENV !== 'test') {
       console.warn('[indexer] VACCINATIONS_CONTRACT_ID not set — skipping poll');
     }
+    return;
+  }
+
+  // Refuse to process new events if the database failed its integrity check.
+  // Never silently initialize an empty replacement database over a corrupt one.
+  const integrity = checkDatabaseIntegrity();
+  if (!integrity.ok) {
+    console.error(
+      '[indexer] OPERATOR ALERT: database integrity check failed — refusing to process events. ' +
+      'Investigate and repair the index database before restarting the poller. ' +
+      `Reason: ${integrity.reason}`
+    );
     return;
   }
 
