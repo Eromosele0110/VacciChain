@@ -501,20 +501,20 @@ describe('GET /events route', () => {
   const app = require('../src/app');
 
   it('returns events array', async () => {
-    const res = await request(app).get('/events');
+    const res = await request(app).get('/v1/events');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.events)).toBe(true);
     expect(typeof res.body.count).toBe('number');
   });
 
   it('filters by event_type', async () => {
-    const res = await request(app).get('/events?event_type=VaccinationMinted');
+    const res = await request(app).get('/v1/events?event_type=VaccinationMinted');
     expect(res.status).toBe(200);
     res.body.events.forEach((e) => expect(e.event_type).toBe('VaccinationMinted'));
   });
 
   it('respects limit param', async () => {
-    const res = await request(app).get('/events?limit=1');
+    const res = await request(app).get('/v1/events?limit=1');
     expect(res.status).toBe(200);
     expect(res.body.events.length).toBeLessThanOrEqual(1);
   });

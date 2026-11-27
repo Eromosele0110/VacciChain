@@ -9,6 +9,7 @@ const { resolveContractErrorMessage, mapContractError } = require('../stellar/co
 const { audit } = require('../middleware/auditLog');
 const validate = require('../middleware/validate');
 const { hasConsented } = require('../indexer/db');
+const { toApiRecords } = require('../schemas/vaccinationRecord');
 const { issueSchema, revokeSchema, vaccinationListQuerySchema } = require('./schemas/vaccination.schemas');
 const { createRateLimiter } = require('../middleware/rateLimit');
 const idempotency = require('../middleware/idempotency');
@@ -409,7 +410,7 @@ router.get(
 
       const total = sorted.length;
       const start = (rawPage - 1) * rawLimit;
-      const data = sorted.slice(start, start + rawLimit);
+      const data = toApiRecords(sorted.slice(start, start + rawLimit));
       const hasMore = start + data.length < total;
 
       res.json({

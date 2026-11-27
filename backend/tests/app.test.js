@@ -26,38 +26,38 @@ describe('Health check', () => {
 
 describe('Auth routes', () => {
   it('POST /auth/sep10 requires public_key', async () => {
-    const res = await request(app).post('/auth/sep10').send({});
+    const res = await request(app).post('/v1/auth/sep10').send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Validation failed');
     expect(JSON.stringify(res.body.details)).toMatch(/public_key/);
   });
 
   it('POST /auth/sep10 rejects invalid key', async () => {
-    const res = await request(app).post('/auth/sep10').send({ public_key: 'not-a-key' });
+    const res = await request(app).post('/v1/auth/sep10').send({ public_key: 'not-a-key' });
     expect(res.status).toBe(400);
   });
 
   it('POST /auth/verify requires transaction and nonce', async () => {
-    const res = await request(app).post('/auth/verify').send({});
+    const res = await request(app).post('/v1/auth/verify').send({});
     expect(res.status).toBe(400);
   });
 });
 
 describe('Vaccination routes', () => {
   it('POST /vaccination/issue requires auth', async () => {
-    const res = await request(app).post('/vaccination/issue').send({});
+    const res = await request(app).post('/v1/vaccination/issue').send({});
     expect(res.status).toBe(401);
   });
 
   it('GET /vaccination/:wallet requires auth', async () => {
-    const res = await request(app).get('/vaccination/GABC');
+    const res = await request(app).get('/v1/vaccination/GABC');
     expect(res.status).toBe(401);
   });
 });
 
 describe('Verify route', () => {
   it('GET /verify/:wallet rejects invalid address', async () => {
-    const res = await request(app).get('/verify/invalid-address');
+    const res = await request(app).get('/v1/verify/invalid-address');
     expect(res.status).toBe(400);
   });
 });

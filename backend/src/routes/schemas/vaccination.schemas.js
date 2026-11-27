@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const crypto = require('crypto');
+const { issueRequestV1 } = require('../../schemas/vaccinationRecord');
 
 /**
  * Validation schemas for vaccination routes.
@@ -363,7 +364,7 @@ function hashPayload(payload) {
 }
 
 module.exports = {
-  issueSchema,
+  issueSchema: issueRequestV1,
   revokeSchema,
   dateOnlySchema,
   isoUtcTimestampSchema,

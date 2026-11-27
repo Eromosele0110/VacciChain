@@ -6,6 +6,7 @@ const { resolveContractErrorMessage } = require('../stellar/contractErrors');
 const { verifyLimiter, verifierKeyLimiter } = require('../middleware/rateLimiter');
 const verifierApiKey = require('../middleware/verifierApiKey');
 const authMiddleware = require('../middleware/auth');
+const { toApiRecords } = require('../schemas/vaccinationRecord');
 const { audit } = require('../middleware/auditLog');
 
 const router = express.Router();
@@ -188,7 +189,8 @@ router.get(
     }
 
     try {
-      const { vaccinated, records } = await verifyVaccination(wallet);
+      const { vaccinated, records: rawRecords } = await verifyVaccination(wallet);
+      const records = toApiRecords(rawRecords);
       const status = deriveStatus(vaccinated, records);
 
       verifyCache.set(wallet, {
@@ -320,7 +322,8 @@ router.get(
     }
 
     try {
-      const { vaccinated, records } = await verifyVaccination(wallet);
+      const { vaccinated, records: rawRecords } = await verifyVaccination(wallet);
+      const records = toApiRecords(rawRecords);
       const status = deriveStatus(vaccinated, records);
 
       verifyCache.set(wallet, {
