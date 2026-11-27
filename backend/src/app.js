@@ -28,6 +28,7 @@ const requestId = require('./middleware/requestId');
 const { sanitizeInputs } = require('./middleware/sanitize');
 const errorHandler = require('./middleware/errorHandler');
 const { onboardingLimiter, batchVerifyLimiter } = require('./middleware/rateLimit');
+const idempotency = require('./middleware/idempotency');
 
 const app = express();
 // Trust only the configured number of proxy hops so client identity (and thus
@@ -150,6 +151,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Idempotency for mint (issue) requests — runs after auth so the issuer wallet
+// is available for key scoping. Only applies to POST /vaccination/issue.
+app.use('/vaccination/issue', idempotency);
+
 app.use('/auth', authRoutes);
 app.use('/vaccination', vaccinationRoutes);
 app.use('/verify', verifyRoutes);
@@ -159,6 +164,7 @@ app.use('/events', eventsRoutes);
 // v1 routes — all API endpoints are versioned under /v1/
 const v1 = express.Router();
 v1.use(apiVersion);
+v1.use('/vaccination/issue', idempotency);
 v1.use('/auth', authRoutes);
 v1.use('/vaccination', vaccinationRoutes);
 v1.use('/verify', verifyRoutes);
